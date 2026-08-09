@@ -48,14 +48,14 @@ export default async function handler(req, res) {
       if (ai) {
         // Stagger launches — the Vertex image model rejects bursts of simultaneous requests
         // (RESOURCE_EXHAUSTED) even when a single request succeeds instantly.
-        await sleep(index * 350);
+        await sleep(index * 150);
         try {
           return await generateOne(p, index);
         } catch (err) {
           console.warn(`Gemini image generation failed for prompt ${index}, retrying once:`, err.message);
         }
         try {
-          await sleep(800);
+          await sleep(400);
           return await generateOne(p, index);
         } catch (err) {
           console.warn(`Gemini image generation retry failed for prompt ${index}, using wallpaper fallback:`, err.message);
