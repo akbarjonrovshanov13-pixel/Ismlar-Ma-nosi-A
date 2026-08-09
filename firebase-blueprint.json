@@ -1,0 +1,70 @@
+{
+  "entities": {
+    "SavedVideo": {
+      "title": "SavedVideo",
+      "description": "Yaratilgan ismlar va mavzular bo'yicha video loyihalar va ssenariylar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Video hujjati ID-si" },
+        "topic": { "type": "string", "maxLength": 150, "description": "Ism yoki mavzo" },
+        "script": { "type": "array", "description": "Subtitr jumlalari qatori" },
+        "fullScript": { "type": "string", "maxLength": 2000, "description": "To'liq diktorlik matni" },
+        "hashtags": { "type": "array", "description": "Teglar ro'yxati" },
+        "imageUrls": { "type": "array", "description": "Rasmlar URL manzillari" },
+        "captionStyle": { "type": "string", "maxLength": 50, "description": "Subtitr stili (TIKTOK_YELLOW, INSTAGRAM_WHITE, NEON_GLOW)" },
+        "voice": { "type": "string", "maxLength": 50, "description": "Ovoz turi" },
+        "userId": { "type": "string", "maxLength": 128, "description": "Muallif foydalanuvchi ID-si" },
+        "userEmail": { "type": "string", "maxLength": 150, "description": "Muallif e-pochtasi" },
+        "createdAt": { "type": "string", "description": "Yaratilgan sana ISO formati yoki server vaqti" },
+        "likesCount": { "type": "number", "description": "Layklar soni" }
+      },
+      "required": ["topic", "fullScript", "userId", "createdAt"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Foydalanuvchi profili, sozlamalari va video kreditlari",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128, "description": "Foydalanuvchi ID-si" },
+        "email": { "type": "string", "maxLength": 150, "description": "E-pochta" },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Foydalanuvchi ismi" },
+        "photoURL": { "type": "string", "maxLength": 500, "description": "Profil rasmi" },
+        "credits": { "type": "number", "description": "Qolgan video yaratish huquqlari (kreditlar)" },
+        "totalAllowed": { "type": "number", "description": "Jami taqdim etilgan ruxsatlar soni" },
+        "isApproved": { "type": "boolean", "description": "Admin tomonidan tasdiqlanganlik holati" },
+        "createdAt": { "type": "string", "description": "Ro'yxatdan o'tgan vaqti" }
+      },
+      "required": ["userId", "email"]
+    },
+    "PaymentRequest": {
+      "title": "PaymentRequest",
+      "description": "Foydalanuvchi tomonidan adminga yuborilgan to'lov va paket so'rovi",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "So'rov ID-si" },
+        "userId": { "type": "string", "maxLength": 128, "description": "Foydalanuvchi ID-si" },
+        "userEmail": { "type": "string", "maxLength": 150, "description": "Foydalanuvchi e-pochtasi" },
+        "displayName": { "type": "string", "maxLength": 100, "description": "Foydalanuvchi ismi" },
+        "planName": { "type": "string", "maxLength": 100, "description": "Paket nomi (5 ta Ism / 15 ta Ism)" },
+        "amount": { "type": "string", "maxLength": 50, "description": "To'lov summasi (50 000 so'm / 100 000 so'm)" },
+        "status": { "type": "string", "maxLength": 30, "description": "Holat (PENDING, APPROVED, REJECTED)" },
+        "createdAt": { "type": "string", "description": "Yaratilgan vaqti" }
+      },
+      "required": ["userId", "userEmail", "planName", "amount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/SavedVideo" },
+      "description": "Yaratilgan videolarni saqlash va hamjamiyat xronikasida ulashish to'plami"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Foydalanuvchilar profillari to'plami"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRequest" },
+      "description": "To'lov so'rovlari va chek tasdiqlash to'plami"
+    }
+  }
+}

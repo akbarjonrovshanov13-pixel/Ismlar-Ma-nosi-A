@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidVideo(data) {
+      return data.keys().hasAll(['topic', 'fullScript', 'userId', 'createdAt']) &&
+        data.topic is string && data.topic.size() <= 150 &&
+        data.fullScript is string && data.fullScript.size() <= 2000 &&
+        data.userId is string && data.userId == request.auth.uid &&
+        data.createdAt is string &&
+        (!('hashtags' in data) || data.hashtags is list) &&
+        (!('script' in data) || data.script is list) &&
+        (!('imageUrls' in data) || data.imageUrls is list) &&
+        (!('captionStyle' in data) || (data.captionStyle is string && data.captionStyle.size() <= 50)) &&
+        (!('voice' in data) || (data.voice is string && data.voice.size() <= 50)) &&
+        (!('likesCount' in data) || data.likesCount is number);
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Videos collection
+    match /videos/{videoId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(videoId) && isValidVideo(incoming());
+      allow update: if isSignedIn() && isValidId(videoId) && isOwner(existing().userId) && isValidVideo(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(videoId) && isOwner(existing().userId);
+    }
+
+    // User profile collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId);
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn() && isOwner(userId);
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(paymentId);
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+  }
+}

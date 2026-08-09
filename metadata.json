@@ -1,0 +1,8 @@
+{
+  "name": "Ismlar Ma'nosi AI Video Generator",
+  "description": "Ismlar ma'nosi, xarakteri va tarixi haqida avtomatik video yaratish hamda Firebase bulut xizmati bilan saqlash tizimi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
