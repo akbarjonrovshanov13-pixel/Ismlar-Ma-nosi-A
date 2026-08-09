@@ -100,10 +100,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Preload Luxe Core Outro Images
   useEffect(() => {
     const defaultUrls = [
-      "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?q=80&w=1080&auto=format&fit=crop", // Qutilar
-      "https://images.unsplash.com/photo-1589363460779-cd717dcbe736?q=80&w=1080&auto=format&fit=crop", // Paketlar
-      "https://images.unsplash.com/photo-1513151233558-d860c5398176?q=80&w=1080&auto=format&fit=crop", // Lenta
-      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=1080&auto=format&fit=crop"  // Bir martalik idishlar
+      "/fallback/outro-boxes.jpg", // Qutilar
+      "/fallback/outro-bags.jpg",  // Paketlar
+      "/fallback/outro-wrap.jpg",  // Lenta
+      "/fallback/outro-cups.jpg"   // Bir martalik idishlar
     ];
     const urls = customOutroImages && customOutroImages.length > 0 ? customOutroImages : defaultUrls;
     const loaded: HTMLImageElement[] = [];

@@ -281,7 +281,7 @@ const App: React.FC = () => {
           script: customSegments,
           fullScript: fullScriptWithOutro,
           hashtags: draftHashtags.length ? [...draftHashtags, "#luxecore", "#qadoqlash"] : ["#ismlar", "#luxecore", "#qadoqlash"],
-          imageUrls: finalImages.length ? finalImages : [`https://picsum.photos/seed/${topic}/1080/1920`],
+          imageUrls: finalImages.length ? finalImages : ["/fallback/cup.jpg"],
           audioBase64,
           imagePrompts: draftImagePrompts,
           sources: state.videoData?.sources || []
@@ -330,7 +330,7 @@ const App: React.FC = () => {
           script: scriptData.script_segments,
           fullScript: fullScriptWithOutro,
           hashtags: [...scriptData.hashtags, "#luxecore", "#qadoqlash"],
-          imageUrls: finalImages.length ? finalImages : [`https://picsum.photos/seed/${topic}/1080/1920`],
+          imageUrls: finalImages.length ? finalImages : ["/fallback/cup.jpg"],
           audioBase64,
           imagePrompts: scriptData.image_prompts_en,
           sources: scriptData.sources
