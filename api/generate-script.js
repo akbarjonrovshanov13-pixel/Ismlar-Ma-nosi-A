@@ -40,25 +40,21 @@ export default async function handler(req, res) {
       hookInstructions = "\n- **VIRAL HOOK STYLE:** Tasodifiy eng jozibali, portlovchi va noodatiy hook turlaridan birini ishlating.";
     }
 
-    const strategies = [
-      { id: "flash-json", model: "gemini-3.1-flash-lite", json: true, search: useSearch },
-      { id: "flash-raw", model: "gemini-3.1-flash-lite", json: false, search: useSearch },
-    ];
+    const models = ["gemini-2.5-flash", "gemini-2.5-pro"];
     let lastError = null;
 
-    for (const strategy of strategies) {
+    for (const model of models) {
       try {
-        const strategyConfig = {
-          systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
-          responseMimeType: strategy.json ? "application/json" : undefined,
-          tools: strategy.search ? [{ googleSearch: {} }] : undefined,
-        };
-
-        const response = await retry(() => ai.models.generateContent({
-          model: strategy.model,
-          contents: `Ism: "${topic}". Ushby ismning tub ma'nosi, tarixi va psixologik portretini to'liq ochib beruvchi 60 soniyalik viral ssenariy yozing.${hookInstructions}`,
-          config: strategyConfig,
-        }));
+        const response = await retry(() =>
+          ai.models.generateContent({
+            model,
+            contents: `Ism: "${topic}". Ushby ismning tub ma'nosi, tarixi va psixologik portretini to'liq ochib beruvchi 60 soniyalik viral ssenariy yozing.${hookInstructions}`,
+            config: {
+              systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
+              responseMimeType: "application/json",
+            },
+          })
+        );
 
         if (!response.text) continue;
         const parsed = parseJSON(response.text);
