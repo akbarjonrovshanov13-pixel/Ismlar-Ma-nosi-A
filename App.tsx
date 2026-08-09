@@ -204,35 +204,6 @@ const App: React.FC = () => {
   };
 
   const checkCreditsAndAuthorize = async (): Promise<boolean> => {
-    let currentUser = user;
-    if (!currentUser) {
-      try {
-        currentUser = await signInWithGoogle();
-        setUser(currentUser);
-      } catch (err) {
-        return false;
-      }
-    }
-
-    if (!currentUser) return false;
-
-    // Primary admin email always has full access
-    const isPrimaryAdmin = currentUser.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
-    if (isPrimaryAdmin) return true;
-
-    // Get fresh user profile from Firestore
-    const freshProfile = await getUserProfileData(currentUser.uid);
-    setUserProfile(freshProfile);
-
-    const credits = freshProfile?.credits || 0;
-    const isApproved = freshProfile?.isApproved;
-
-    if (credits <= 0 || !isApproved) {
-      alert("⚠️ Video yaratish uchun hisobingizda video kreditlari yetarli emas!\n\nPaynet orqali to'lov qiling va chekni Telegram adminga (@Akramjon1984) yuboring. Admin tasdiqlagach, videolar yaratishingiz mumkin.");
-      setIsPricingOpen(true);
-      return false;
-    }
-
     return true;
   };
 
