@@ -4,31 +4,31 @@ import { GoogleGenAI, Modality } from "@google/genai";
 // Service Account: vertex-sa@gen-lang-client-0604912271 (cross-project access)
 // Billing Project: project-f811a9b5-056c-4f67-b95 ($273.02 kredit)
 export function getVertexAI() {
-  // 1. Agar GEMINI_API_KEY (AI Studio Billing Key) berilgan bo'lsa, to'g'ridan-to'g'ri API key bilan ishlatamiz
-  if (process.env.GEMINI_API_KEY) {
-    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-
-  // 2. Aks holda Google Cloud Vertex AI (GCP $273.02 Billing Kredit) bilan ishlaydi
   const privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\r/g, "")?.replace(/\\n/g, "\n");
   const clientEmail = process.env.GCP_CLIENT_EMAIL;
   const projectId = process.env.GCP_PROJECT_ID || "gen-lang-client-0604912271";
 
-  if (!privateKey || !clientEmail) {
-    throw new Error("GEMINI_API_KEY yoki (GCP_PRIVATE_KEY va GCP_CLIENT_EMAIL) sozlanmagan");
+  // 1. Prioritize GCP Vertex AI Service Account ($273+ credit)
+  if (privateKey && clientEmail) {
+    return new GoogleGenAI({
+      vertexai: true,
+      project: projectId,
+      location: "us-central1",
+      googleAuthOptions: {
+        credentials: {
+          client_email: clientEmail,
+          private_key: privateKey,
+        },
+      },
+    });
   }
 
-  return new GoogleGenAI({
-    vertexai: true,
-    project: projectId,
-    location: "us-central1",
-    googleAuthOptions: {
-      credentials: {
-        client_email: clientEmail,
-        private_key: privateKey,
-      },
-    },
-  });
+  // 2. Fallback to GEMINI_API_KEY if Vertex AI Service Account is not set
+  if (process.env.GEMINI_API_KEY) {
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+
+  throw new Error("GCP Service Account yoki GEMINI_API_KEY sozlanmagan");
 }
 
 // JSON parse helper

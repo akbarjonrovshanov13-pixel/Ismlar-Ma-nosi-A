@@ -2,10 +2,28 @@ import { GoogleGenAI } from "@google/genai";
 import { SCRIPT_SYSTEM_INSTRUCTION } from "../constants";
 import { VoiceType, HookStyle } from "../types";
 
-const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
-const ai = new GoogleGenAI({ apiKey });
+const API_BASE = "/api";
 
 export const generateScript = async (topic: string, useSearch: boolean, hookStyle: HookStyle = HookStyle.RANDOM) => {
+  // 1. Try Vertex AI Serverless Backend (/api/generate-script) with GCP $273+ credits
+  try {
+    const res = await fetch(`${API_BASE}/generate-script`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic, useSearch, hookStyle }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (backendErr) {
+    console.warn("Backend /api/generate-script unavailable, falling back to direct API key:", backendErr);
+  }
+
+  // 2. Fallback to Direct Client SDK if backend API endpoint is unroutable
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY || "";
+  if (!apiKey) throw new Error("API Kalit yoki Server ulanishi sozlanmagan");
+  const ai = new GoogleGenAI({ apiKey });
+
   const hookInstructions = hookStyle
     ? `\n- VIRAL HOOK STYLE: ${hookStyle} uslubida boshlang.`
     : "\n- VIRAL HOOK STYLE: Tasodifiy eng jozibali hook turini tanlang.";
