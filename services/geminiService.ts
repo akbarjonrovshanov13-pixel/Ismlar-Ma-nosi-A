@@ -68,12 +68,26 @@ export const generateAudio = async (text: string, voiceType: VoiceType): Promise
 };
 
 export const generateImages = async (prompts: string[]): Promise<string[]> => {
-  return [
-    "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=1080&h=1920&q=80",
-    "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1080&h=1920&q=80",
-    "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=1080&h=1920&q=80",
-    "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=1080&h=1920&q=80",
-  ];
+  try {
+    const res = await fetch(`${API_BASE}/generate-images`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompts }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.images && data.images.length > 0) return data.images;
+    }
+  } catch (err) {
+    console.warn("Backend /api/generate-images failed, falling back to Pollinations AI:", err);
+  }
+
+  const validPrompts = (prompts && prompts.length > 0) ? prompts.slice(0, 4) : ["Cinematic beautiful typography poster"];
+  return validPrompts.map((p, index) => {
+    const cleanPrompt = encodeURIComponent(`${p}, 8k resolution, cinematic volumetric lighting, 9:16 vertical aspect ratio, masterpiece, photorealistic`);
+    const seed = Math.floor(Math.random() * 10000) + index * 777;
+    return `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1080&height=1920&nologo=true&seed=${seed}`;
+  });
 };
 
 export const findImages = async (topic: string): Promise<string[]> => {
