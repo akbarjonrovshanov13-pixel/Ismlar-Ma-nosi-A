@@ -23,9 +23,22 @@ export default async function handler(req, res) {
 
     const ai = getVertexAI();
 
-    const hookInstructions = hookStyle
-      ? `\n- VIRAL HOOK STYLE: ${hookStyle} uslubida boshlang.`
-      : "\n- VIRAL HOOK STYLE: Tasodifiy eng jozibali hook turini tanlang.";
+    let hookInstructions = "";
+    if (hookStyle === "SHOCK") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Qat'iy ravishda SHOK / HAYRATLANARLI fakt bilan boshlang. Masalan: 'Agar ismingiz [ISM] bo'lsa, bu videoni o'chirib yubormang. Hayotingizdagi eng katta sirni ochamiz!' yoki shunga o'xshash sirlilik va drama darajasi o'ta yuqori bo'lgan boshlanish.";
+    } else if (hookStyle === "FRIEND") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Do'stlariga / tanishlariga yuborishga undovchi boshlanish bo'lsin. Masalan: 'Tezda tanishingiz bo'lgan [ISM] ga bu videoni yuboring! U o'zi haqidagi bu sirni bilishi shart.'";
+    } else if (hookStyle === "PSYCHOLOGY") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Psixologik tasdiq yoki tadqiqotga asoslangan o'ta qiziqarli boshlanish qiling. Masalan: 'Psixologlarning ta'kidlashicha, [ISM] ismli insonlar tashqaridan juda o'tkir ko'rinsalar ham, aslida...'";
+    } else if (hookStyle === "INTRIGUE") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Ularning maxfiy jozibasi yoki boshqalarni jalb qiluvchi kuchi haqida qiziqarli savol bilan boshlang.";
+    } else if (hookStyle === "WARNING") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Ogohlantirish yoki ehtiyotkorlikka chorlovchi jiddiy boshlanish qiling. Masalan: 'Hech qachon [ISM] ismli insonni aldashga urinmang yoki uni ranjitmang!'";
+    } else if (hookStyle === "QUESTION") {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Hamma bilishi kerak bo'lgan, ammo ko'pchilik bilmaydigan o'ta sirli savol yoki kashfiyot bilan boshlang.";
+    } else {
+      hookInstructions = "\n- **VIRAL HOOK STYLE:** Tasodifiy eng jozibali, portlovchi va noodatiy hook turlaridan birini ishlating.";
+    }
 
     const config = {
       systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
