@@ -11,10 +11,8 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || ''),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || env.API_KEY || ''),
         'process.env.GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL || 'gemini-2.5-flash'),
-        'process.env.GCP_PROJECT_ID': JSON.stringify(env.GCP_PROJECT_ID || '')
+        'process.env.GCP_PROJECT_ID': JSON.stringify(env.GCP_PROJECT_ID || 'gen-lang-client-0604912271')
       },
       resolve: {
         alias: {

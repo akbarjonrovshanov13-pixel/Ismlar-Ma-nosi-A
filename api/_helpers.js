@@ -1,16 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Vertex AI client — ai-media-lab-app loyihasidagi kabi "global" location
-// Service Account: vertex-sa@gen-lang-client-0604912271 (cross-project access)
-// gemini-3.1-flash-lite, gemini-3.1-flash-tts-preview, gemini-3.1-flash-lite-image
+// Vertex AI client — 100% GCP Vertex AI Service Account ($273+ credits)
+// Service Account: vertex-sa@gen-lang-client-0604912271
 export function getVertexAI(locationOverride) {
-  const privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\r/g, "")?.replace(/\\n/g, "\n");
-  const clientEmail = process.env.GCP_CLIENT_EMAIL;
+  const rawKey = process.env.GCP_PRIVATE_KEY || "";
+  const privateKey = rawKey.replace(/\r/g, "").replace(/\\n/g, "\n");
+  const clientEmail = process.env.GCP_CLIENT_EMAIL || "vertex-sa@gen-lang-client-0604912271.iam.gserviceaccount.com";
   const projectId = process.env.GCP_PROJECT_ID || "gen-lang-client-0604912271";
   const location = locationOverride || process.env.GCP_LOCATION || "global";
 
-  // 1. Prioritize GCP Vertex AI Service Account
-  if (privateKey && clientEmail) {
+  if (privateKey && privateKey.includes("BEGIN PRIVATE KEY")) {
     return new GoogleGenAI({
       vertexai: true,
       project: projectId,
@@ -24,15 +23,10 @@ export function getVertexAI(locationOverride) {
     });
   }
 
-  // 2. Fallback to GEMINI_API_KEY
-  if (process.env.GEMINI_API_KEY) {
-    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  }
-
-  throw new Error("GCP Service Account yoki GEMINI_API_KEY sozlanmagan");
+  throw new Error("GCP Service Account kaliti sozlanmagan");
 }
 
-// Robust JSON parser with repair logic (ai-media-lab-app dagi kabi)
+// Robust JSON parser with repair logic
 export function parseJSON(text) {
   let clean = text.trim().replace(/```json/g, "").replace(/```/g, "").trim();
 
@@ -58,7 +52,7 @@ export function parseJSON(text) {
   throw new Error("JSON formatini o'qib bo'lmadi");
 }
 
-// Retry logic (ai-media-lab-app dagi kabi)
+// Retry logic
 export async function retry(fn, retries = 3, delay = 1000) {
   try {
     return await fn();
