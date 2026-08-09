@@ -1,11 +1,12 @@
 import { getVertexAI, setCors } from "./_helpers.js";
 
-// CORS-safe fallback (used only if Vertex AI generation fails for a slot)
+// Same-origin fallback (used only if Vertex AI generation fails for a slot) —
+// branded Luxe Core product shots instead of generic stock wallpaper.
 const HD_WALLPAPERS = [
-  "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?auto=format&fit=crop&w=1080&h=1920&q=80", // Royal Gold Obsidian
-  "https://images.unsplash.com/photo-1506703719100-a0f3a48c0f86?auto=format&fit=crop&w=1080&h=1920&q=80", // Cosmic Space Nebula
-  "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?auto=format&fit=crop&w=1080&h=1920&q=80", // Emerald Fantasy Forest
-  "https://images.unsplash.com/photo-1513151233558-d860c5398176?auto=format&fit=crop&w=1080&h=1920&q=80", // Warm Sunset Golden Hour
+  "/fallback/cup.jpg",
+  "/fallback/container.jpg",
+  "/fallback/clamshell.jpg",
+  "/fallback/drink.jpg",
 ];
 
 const STYLE_SUFFIXES = [
