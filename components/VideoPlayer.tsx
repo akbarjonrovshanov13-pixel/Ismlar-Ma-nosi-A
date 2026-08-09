@@ -347,7 +347,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
           img.onerror = () => {
             const c = document.createElement('canvas');
-            c.width = WIDTH; c.height = HEIGHT;
+            c.width = BUFFER_W; c.height = BUFFER_H;
+            const ctx = c.getContext('2d');
+            if (ctx) {
+              // Rich 3D Black & Gold Radial Gradient
+              const grad = ctx.createRadialGradient(BUFFER_W / 2, BUFFER_H / 2, 100, BUFFER_W / 2, BUFFER_H / 2, BUFFER_H * 0.7);
+              grad.addColorStop(0, '#2d1f0d');
+              grad.addColorStop(1, '#050302');
+              ctx.fillStyle = grad;
+              ctx.fillRect(0, 0, BUFFER_W, BUFFER_H);
+
+              // Golden sparkles
+              ctx.fillStyle = '#fbbf24';
+              for (let p = 0; p < 40; p++) {
+                ctx.globalAlpha = Math.random() * 0.5 + 0.2;
+                ctx.beginPath();
+                ctx.arc(Math.random() * BUFFER_W, Math.random() * BUFFER_H, Math.random() * 4 + 1, 0, Math.PI * 2);
+                ctx.fill();
+              }
+              ctx.globalAlpha = 1.0;
+
+              // Glowing Gold Name Typography
+              const goldGrad = ctx.createLinearGradient(BUFFER_W / 2 - 200, 0, BUFFER_W / 2 + 200, 0);
+              goldGrad.addColorStop(0, '#fef08a');
+              goldGrad.addColorStop(0.5, '#fbbf24');
+              goldGrad.addColorStop(1, '#d97706');
+              ctx.fillStyle = goldGrad;
+              ctx.font = '900 110px Inter, sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
+              ctx.shadowBlur = 30;
+              ctx.fillText(topic || 'ISMLAR MA\'NOSI', BUFFER_W / 2, BUFFER_H / 2);
+            }
             resolve({
                 canvas: c,
                 motion: { startX:0, startY:0, startScale:1, endX:0, endY:0, endScale:1 },
