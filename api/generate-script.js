@@ -1,4 +1,4 @@
-import { getVertexAI, parseJSON, setCors } from "./_helpers.js";
+import { getVertexAI, parseJSON, retry, setCors } from "./_helpers.js";
 
 const SCRIPT_SYSTEM_INSTRUCTION = `
 Siz ijtimoiy tarmoqlar (Instagram Reels/TikTok) uchun millionlab ko'rishlar (views) yig'adigan, o'ta VIRAL ismlar tahlili videolarini yaratuvchi daho marketolog va psixologsiz.
@@ -40,21 +40,25 @@ export default async function handler(req, res) {
       hookInstructions = "\n- **VIRAL HOOK STYLE:** Tasodifiy eng jozibali, portlovchi va noodatiy hook turlaridan birini ishlating.";
     }
 
-    const config = {
-      systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-    };
-
-    const models = ["gemini-2.5-flash"];
+    const strategies = [
+      { id: "flash-json", model: "gemini-3.1-flash-lite", json: true, search: useSearch },
+      { id: "flash-raw", model: "gemini-3.1-flash-lite", json: false, search: useSearch },
+    ];
     let lastError = null;
 
-    for (const model of models) {
+    for (const strategy of strategies) {
       try {
-        const response = await ai.models.generateContent({
-          model,
+        const strategyConfig = {
+          systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
+          responseMimeType: strategy.json ? "application/json" : undefined,
+          tools: strategy.search ? [{ googleSearch: {} }] : undefined,
+        };
+
+        const response = await retry(() => ai.models.generateContent({
+          model: strategy.model,
           contents: `Ism: "${topic}". Ushby ismning tub ma'nosi, tarixi va psixologik portretini to'liq ochib beruvchi 60 soniyalik viral ssenariy yozing.${hookInstructions}`,
-          config,
-        });
+          config: strategyConfig,
+        }));
 
         if (!response.text) continue;
         const parsed = parseJSON(response.text);
