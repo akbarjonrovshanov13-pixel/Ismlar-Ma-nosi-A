@@ -5,9 +5,9 @@ import { VoiceType, HookStyle } from "../types";
 const API_BASE = "/api";
 
 export const generateScript = async (topic: string, useSearch: boolean, hookStyle: HookStyle = HookStyle.RANDOM) => {
-  // 1. Try Vertex AI Serverless Backend (/api/generate-script) with GCP $273+ credits
+  // 1. Try Vertex AI Serverless Backend (/api/generate-script.js) with GCP $273+ credits
   try {
-    const res = await fetch(`${API_BASE}/generate-script`, {
+    const res = await fetch(`${API_BASE}/generate-script.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ topic, useSearch, hookStyle }),
@@ -16,7 +16,7 @@ export const generateScript = async (topic: string, useSearch: boolean, hookStyl
       return await res.json();
     }
   } catch (backendErr) {
-    console.warn("Backend /api/generate-script unavailable, falling back to direct API key:", backendErr);
+    console.warn("Backend /api/generate-script.js unavailable, falling back to direct API key:", backendErr);
   }
 
   // 2. Fallback to Direct Client SDK if backend API endpoint is unroutable
@@ -69,7 +69,7 @@ export const generateAudio = async (text: string, voiceType: VoiceType): Promise
 
 export const generateImages = async (prompts: string[]): Promise<string[]> => {
   try {
-    const res = await fetch(`${API_BASE}/generate-images`, {
+    const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompts }),
@@ -79,7 +79,7 @@ export const generateImages = async (prompts: string[]): Promise<string[]> => {
       if (data.images && data.images.length > 0) return data.images;
     }
   } catch (err) {
-    console.warn("Backend /api/generate-images failed, falling back to Pollinations AI:", err);
+    console.warn("Backend /api/generate-images.js failed, falling back to Pollinations AI:", err);
   }
 
   const validPrompts = (prompts && prompts.length > 0) ? prompts.slice(0, 4) : ["Cinematic beautiful typography poster"];
