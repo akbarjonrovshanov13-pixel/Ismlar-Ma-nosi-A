@@ -895,13 +895,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
              }
 
              const popFor = (wt: WordTiming) => {
-                if (!(time >= wt.start && time < wt.end)) return { scale: 1.0, yOffset: 0 };
+                if (!(time >= wt.start && time < wt.end)) return { scaleX: 1.0, scaleY: 1.0, yOffset: 0 };
                 // CapCut / TikTok Spring Pop & Bounce Animation
                 const wordDuration = Math.max(0.1, wt.end - wt.start);
                 const activeProgress = Math.min(1, Math.max(0, (time - wt.start) / wordDuration));
+                const curve = Math.sin(activeProgress * Math.PI);
+
+                // Grow freely upwards, but cap sideways growth: a wide word scaled 1.22x pushes
+                // its badge far past the inter-word gap and collides with its neighbours.
+                // Free space per side is the gap minus the padding the badge already occupies.
+                const badgeW = (wt.width || 0) + CAPTION_BADGE_PAD_X * 2;
+                const slack = Math.max(0, CAPTION_WORD_GAP - CAPTION_BADGE_PAD_X);
+                const maxGrowX = Math.min(0.22, (slack * 2) / Math.max(1, badgeW));
+
                 return {
-                    scale: 1.0 + 0.22 * Math.sin(activeProgress * Math.PI), // Elastic pop curve
-                    yOffset: -4 * Math.sin(activeProgress * Math.PI)         // Subtle float
+                    scaleX: 1.0 + maxGrowX * curve,
+                    scaleY: 1.0 + 0.22 * curve,
+                    yOffset: -4 * curve // Subtle float
                 };
              };
 
@@ -914,7 +924,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
              line.words.forEach((wt, idx) => {
                 if (!(time >= wt.start && time < wt.end)) return;
                 const style = badgeFill[captionStyle] || badgeFill[CaptionStyle.TIKTOK_YELLOW];
-                const { scale, yOffset } = popFor(wt);
+                const { scaleX, scaleY, yOffset } = popFor(wt);
                 const wWidth = wt.width || 0;
                 const cx = wordX[idx] + wWidth / 2;
                 const cy = yPos + yOffset;
@@ -923,7 +933,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 ctx.save();
                 ctx.translate(cx, cy);
-                ctx.scale(scale, scale);
+                ctx.scale(scaleX, scaleY);
                 ctx.translate(-cx, -cy);
                 ctx.fillStyle = style.fill;
                 ctx.shadowColor = style.glow;
@@ -943,7 +953,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 ctx.save();
 
-                const { scale: wordScale, yOffset } = popFor(wt);
+                const { scaleX, scaleY, yOffset } = popFor(wt);
 
                 currentX = wordX[idx];
                 const wWidth = wt.width || 0;
@@ -951,7 +961,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 const wordCenterY = yPos + yOffset;
 
                 ctx.translate(wordCenterX, wordCenterY);
-                ctx.scale(wordScale, wordScale);
+                ctx.scale(scaleX, scaleY);
                 ctx.translate(-wordCenterX, -wordCenterY);
 
                 // Badges were already painted in the pass above, so this only draws glyphs.
