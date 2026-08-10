@@ -9,11 +9,20 @@ const HD_WALLPAPERS = [
   "/fallback/drink.jpg",
 ];
 
-// Image models spell text as garbled glyphs, and for Uzbek names they tend to add Arabic
-// calligraphy unprompted. The name is carried by the subtitles, never by the image.
-// Keep this short: a long negation list ("no text, no letters, no words, no numbers, …")
-// makes the model return an empty response with no image part at all.
+// Backgrounds stay free of writing — asked for text they produce garbled glyphs, and for
+// Uzbek names they add Arabic calligraphy unprompted. Keep this short: a long negation list
+// ("no text, no letters, no words, no numbers, …") makes the model return an empty response
+// with no image part at all.
 const NO_TEXT_RULE = ", without any writing or lettering";
+
+// The opening frame does carry the name. Spelling it out letter by letter is what makes the
+// model get it right — asked plainly for "MALIKA" it returns "MAUKA", but with the dashed
+// spelling and an explicit letter count it renders the word correctly.
+const nameHeroPrompt = (name) => {
+  const clean = String(name).trim().toUpperCase().slice(0, 20);
+  const letters = clean.split("").join("-");
+  return `3D golden metallic capital letters arranged to spell ${letters} (the word "${clean}", ${clean.length} letters), Latin alphabet, resting on polished obsidian black marble, warm cinematic lighting, luxurious and elegant, 8k. Render exactly these ${clean.length} letters and nothing else, no other writing.`;
+};
 
 const STYLE_SUFFIXES = [
   ", luxurious royal gold and obsidian black marble surfaces, ambient warm glowing light, elegant high-end atmosphere, cinematic lighting, 8k" + NO_TEXT_RULE,
@@ -27,8 +36,12 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const { prompts } = req.body || {};
+    const { prompts, topic } = req.body || {};
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
+
+    // Opening frame is the name itself; the rest stay as clean atmospheric backgrounds so the
+    // model only has to spell the name once per video.
+    const heroIndex = topic && String(topic).trim() ? 0 : -1;
 
     let ai = null;
     try {
@@ -40,7 +53,9 @@ export default async function handler(req, res) {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     const generateOne = async (p, index) => {
-      const enhanced = p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
+      const enhanced = index === heroIndex
+        ? nameHeroPrompt(topic)
+        : p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
         contents: [{ role: "user", parts: [{ text: enhanced }] }],

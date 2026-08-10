@@ -162,6 +162,61 @@ const App: React.FC = () => {
     }
   };
 
+  // Uploaded photos come in every aspect ratio, but the video canvas is a fixed 1080x1920.
+  // Pad to 9:16 with a blurred, cover-scaled copy of the photo itself so nothing is cropped
+  // away and no letterbox bars appear. An already-9:16 image comes back untouched, since the
+  // sharp copy then covers the blurred one exactly.
+  const normalizeTo916 = (dataUrl: string): Promise<string> => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const W = 1080;
+      const H = 1920;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx || !img.naturalWidth || !img.naturalHeight) return resolve(dataUrl);
+
+      const coverScale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+      const cw = img.naturalWidth * coverScale;
+      const ch = img.naturalHeight * coverScale;
+      ctx.filter = 'blur(40px)';
+      ctx.drawImage(img, (W - cw) / 2, (H - ch) / 2, cw, ch);
+      ctx.filter = 'none';
+
+      const fitScale = Math.min(W / img.naturalWidth, H / img.naturalHeight);
+      const fw = img.naturalWidth * fitScale;
+      const fh = img.naturalHeight * fitScale;
+      ctx.drawImage(img, (W - fw) / 2, (H - fh) / 2, fw, fh);
+
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+
+  const handleUserImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+
+    const remainingSlots = 6 - userImages.length;
+    if (remainingSlots <= 0) return;
+
+    const read = (file: File) => new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+
+    const dataUrls = await Promise.all(files.slice(0, remainingSlots).map(read));
+    const normalized = await Promise.all(dataUrls.filter(Boolean).map(normalizeTo916));
+
+    setUserImages(prev => [...prev, ...normalized].slice(0, 6));
+    input.value = ''; // let the same file be picked again after a removal
+  };
+
   const handleOutroImagesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const files = Array.from(e.target.files);
@@ -265,7 +320,7 @@ const App: React.FC = () => {
       if (state.videoData && state.videoData.imageUrls.length > 0 && imageMode !== ImageMode.GENERATE) {
         finalImages = state.videoData.imageUrls;
       } else if (imageMode === ImageMode.GENERATE) {
-        finalImages = await generateImages(draftImagePrompts.length ? draftImagePrompts : [topic]);
+        finalImages = await generateImages(draftImagePrompts.length ? draftImagePrompts : [topic], topic);
       } else if (imageMode === ImageMode.FIND) {
         finalImages = await findImages(topic);
       } else {
@@ -296,6 +351,10 @@ const App: React.FC = () => {
 
   const handleGenerate = async () => {
     if (!topic) return;
+    if (imageMode === ImageMode.UPLOAD && userImages.length === 0) {
+      setState(prev => ({ ...prev, error: "O'z rasmlaringizni tanlagansiz — kamida bitta rasm yuklang yoki 'AI yaratadi' rejimiga o'ting." }));
+      return;
+    }
     const isAuthorized = await checkCreditsAndAuthorize();
     if (!isAuthorized) return;
 
@@ -313,7 +372,7 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, loadingStep: 'Sehrli rasmlar va kadrlar chizilmoqda...' }));
       let finalImages: string[] = [];
       if (imageMode === ImageMode.GENERATE) {
-        finalImages = await generateImages(scriptData.image_prompts_en || [topic]);
+        finalImages = await generateImages(scriptData.image_prompts_en || [topic], topic);
       } else if (imageMode === ImageMode.FIND) {
         finalImages = await findImages(topic);
       } else {
@@ -537,6 +596,76 @@ const App: React.FC = () => {
                   <span className="text-[9px] opacity-75 mt-1">Yorqin nur aks</span>
                 </button>
               </div>
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">🖼 Rasmlar Manbasi</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setImageMode(ImageMode.GENERATE)}
+                  className={`p-2.5 rounded-xl text-left border transition flex flex-col justify-between ${
+                    imageMode === ImageMode.GENERATE
+                      ? 'bg-brand-500/20 border-brand-400 text-brand-300 shadow-md shadow-brand-500/10'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-bold block">✨ AI yaratadi</span>
+                  <span className="text-[9px] opacity-75 mt-1">Ism va fon avtomatik</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setImageMode(ImageMode.UPLOAD)}
+                  className={`p-2.5 rounded-xl text-left border transition flex flex-col justify-between ${
+                    imageMode === ImageMode.UPLOAD
+                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-md shadow-emerald-500/10'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-bold block">📁 O'z rasmlarim</span>
+                  <span className="text-[9px] opacity-75 mt-1">6 tagacha, 9:16</span>
+                </button>
+              </div>
+
+              {imageMode === ImageMode.UPLOAD && (
+                <div className="space-y-2 pt-1">
+                  <div className="grid grid-cols-3 gap-2">
+                    {userImages.map((url, idx) => (
+                      <div key={idx} className="relative aspect-[9/16] rounded-lg overflow-hidden border border-slate-700 bg-slate-950">
+                        <img src={url} alt={`Rasm ${idx + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUserImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-950/80 text-slate-300 text-[11px] leading-none flex items-center justify-center border border-slate-700 hover:text-white"
+                          aria-label={`${idx + 1}-rasmni o'chirish`}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+
+                    {userImages.length < 6 && (
+                      <label className="aspect-[9/16] rounded-lg border border-dashed border-slate-700 bg-slate-950 flex flex-col items-center justify-center gap-1 cursor-pointer text-slate-500 hover:text-emerald-300 hover:border-emerald-500/40 transition">
+                        <span className="text-lg leading-none">+</span>
+                        <span className="text-[9px]">Yuklash</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={handleUserImagesUpload}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-500 leading-tight">
+                    {userImages.length > 0
+                      ? `${userImages.length}/6 rasm tanlandi. Har biri avtomatik 9:16 (1080×1920) formatiga keltiriladi.`
+                      : "Istalgan o'lchamdagi rasmlarni yuklang — ular avtomatik 9:16 (1080×1920) formatiga keltiriladi."}
+                  </p>
+                </div>
+              )}
             </div>
           </section>
 

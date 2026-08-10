@@ -786,55 +786,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
     ctx.globalAlpha = 1;
 
-    // --- Name Title ---
-    // Drawn here rather than asked of the image model: the model misspells anything longer
-    // than a few letters (MALIKA came back as "MAUKA") and decorates Uzbek names with Arabic
-    // calligraphy. Rendering it ourselves guarantees the spelling and a consistent look.
-    if (topic) {
-        const title = topic.toUpperCase();
-        const titleY = HEIGHT * 0.30;
-
-        // Ease in over the first second, hold, then fade before the outro takes over.
-        const fadeIn = Math.min(1, time / 1.0);
-        const fadeOut = Math.min(1, Math.max(0, (nameDuration - time) / 1.0));
-        const titleAlpha = Math.max(0, Math.min(fadeIn, fadeOut));
-
-        if (titleAlpha > 0.01) {
-            ctx.save();
-            ctx.globalAlpha = titleAlpha;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-
-            // Shrink to fit rather than overflow on long names.
-            let titleSize = 132;
-            ctx.font = `900 ${titleSize}px "Inter", sans-serif`;
-            const maxTitleWidth = WIDTH - 140;
-            const measured = ctx.measureText(title).width;
-            if (measured > maxTitleWidth) {
-                titleSize = Math.max(56, Math.floor(titleSize * (maxTitleWidth / measured)));
-                ctx.font = `900 ${titleSize}px "Inter", sans-serif`;
-            }
-
-            const gold = ctx.createLinearGradient(0, titleY - titleSize / 2, 0, titleY + titleSize / 2);
-            gold.addColorStop(0, '#fff8dc');
-            gold.addColorStop(0.45, '#fbbf24');
-            gold.addColorStop(1, '#b45309');
-
-            ctx.lineWidth = Math.max(8, titleSize * 0.09);
-            ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-            ctx.lineJoin = 'round';
-            ctx.strokeText(title, WIDTH / 2, titleY);
-
-            ctx.shadowColor = 'rgba(251, 191, 36, 0.65)';
-            ctx.shadowBlur = 38;
-            ctx.fillStyle = gold;
-            ctx.fillText(title, WIDTH / 2, titleY);
-
-            ctx.restore();
-            ctx.globalAlpha = 1;
-        }
-    }
-
     // --- Subtitles ---
     const activeSubtitle = preparedSubtitles.find(s => time >= s.start && time < s.end);
 
