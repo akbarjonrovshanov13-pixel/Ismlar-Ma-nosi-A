@@ -31,6 +31,9 @@ const STYLE_SUFFIXES = [
   ", cinematic warm sunset golden hour, soft pastel tones, dreamlike atmosphere, highly artistic and elegant background, 8k" + NO_TEXT_RULE,
 ];
 
+// Four image calls run in parallel at ~7s each; this leaves headroom over the default limit.
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -69,21 +72,34 @@ export default async function handler(req, res) {
       return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     };
 
+    const isQuotaError = (err) => /429|RESOURCE_EXHAUSTED/i.test(err?.message || "");
+
+    // Deliberately does NOT wait out a quota rejection. Measured against the live project: once
+    // the per-minute image quota trips it stays shut for ~55s regardless of how far it was
+    // exceeded, and waiting 38s inside the request still came back throttled while pushing the
+    // handler to 48s. So a quota hit falls back immediately rather than stalling the video for
+    // a result that isn't coming. Raising the quota in Cloud Console is the actual fix.
+    // The short retry is for transient, non-quota blips only.
+    const RETRY_BACKOFF_MS = [1500];
+
     const images = await Promise.all(validPrompts.map(async (p, index) => {
       if (ai) {
-        // Stagger launches — the Vertex image model rejects bursts of simultaneous requests
+        // Stagger launches — the model rejects bursts of simultaneous requests
         // (RESOURCE_EXHAUSTED) even when a single request succeeds instantly.
         await sleep(index * 150);
-        try {
-          return await generateOne(p, index);
-        } catch (err) {
-          console.warn(`Gemini image generation failed for prompt ${index}, retrying once:`, err.message);
-        }
-        try {
-          await sleep(400);
-          return await generateOne(p, index);
-        } catch (err) {
-          console.warn(`Gemini image generation retry failed for prompt ${index}, using wallpaper fallback:`, err.message);
+
+        for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
+          try {
+            return await generateOne(p, index);
+          } catch (err) {
+            const last = attempt === RETRY_BACKOFF_MS.length;
+            if (last || isQuotaError(err)) {
+              console.warn(`Gemini image generation failed for prompt ${index}, using wallpaper fallback:`, err.message);
+              break;
+            }
+            console.warn(`Gemini image generation failed for prompt ${index}, retrying:`, err.message);
+            await sleep(RETRY_BACKOFF_MS[attempt]);
+          }
         }
       }
       return HD_WALLPAPERS[index % HD_WALLPAPERS.length];
