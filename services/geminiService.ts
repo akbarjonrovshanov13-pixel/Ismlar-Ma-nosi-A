@@ -100,11 +100,13 @@ export const findImages = async (topic: string): Promise<string[]> => {
     const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // Deliberately no reference to the name itself — image models spell it as garbled
+      // glyphs, and the name is already carried by the subtitles.
       body: JSON.stringify({ prompts: [
-        `Beautiful golden typography poster of name ${topic}, 8k cinematic`,
-        `Cosmic starry sky with name ${topic}, ethereal nebula background`,
-        `Magical fantasy forest with name ${topic}, emerald and sapphire`,
-        `Sunset golden hour portrait with name ${topic}, dreamlike pastel`,
+        `Golden light reflecting on polished marble, warm luxurious atmosphere, 8k cinematic`,
+        `Cosmic starry sky, ethereal nebula, deep indigo and violet tones`,
+        `Magical forest clearing, emerald and sapphire light beams through trees`,
+        `Warm sunset golden hour over calm landscape, dreamlike pastel tones`,
       ]}),
     });
     if (res.ok) {

@@ -100,8 +100,8 @@ JSON Output Format (Qat'iy rioya qiling):
   "hashtags": ["#ismlar", "#ismmaonosi", "#[ism]", "#psixologiya", "#faktlar", "#rek"],
   "image_prompts_en": [
     "Prompt 1: Cinematic shot of...",
-    "Prompt 2: 3D glowing typography text '[NAME]' on a beautiful background...",
-    "Prompt 3: Aesthetic and magical atmosphere...",
+    "Prompt 2: Aesthetic and magical atmosphere...",
+    "Prompt 3: Single clear scene, no text or letters of any script...",
     "Prompt 4: ..."
   ]
 }

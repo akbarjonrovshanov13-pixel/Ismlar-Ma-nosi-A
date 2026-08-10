@@ -11,6 +11,13 @@ JSON Output Format:
   "hashtags": ["#ismlar", "#ismmaonosi"],
   "image_prompts_en": ["Prompt 1...", "Prompt 2...", "Prompt 3...", "Prompt 4..."]
 }
+
+IMAGE_PROMPTS_EN UCHUN QAT'IY QOIDALAR:
+1. Rasmda HECH QANDAY YOZUV bo'lmasin — matn, harf, so'z, ism, kalligrafiya (arabcha, lotin yoki boshqa yozuv), plakat yozuvi, logotip yoki raqam. Ism videoda subtitr orqali ko'rsatiladi, rasmga yozish SHART EMAS. Promptda "typography", "text", "letters", "calligraphy", "name written" kabi so'zlarni umuman ishlatmang.
+2. Diniy ramzlar, muqaddas yozuvlar va sig'inish belgilaridan foydalanmang.
+3. Har bir prompt BITTA aniq sahnani tasvirlasin. Bitta promptga bir nechta bog'liqsiz narsani (masalan sher + tog' + saroy + odam + ramzlar) yig'maganingiz muhim — aks holda rasm chalkash va bema'ni chiqadi.
+4. Faqat atmosfera tasvirlansin: manzara yoki bitta obyekt, rang palitrasi, yorug'lik, fon va kayfiyat. Odam yuzini yaqindan ko'rsatmang.
+5. Prompt ingliz tilida, qisqa va aniq bo'lsin (taxminan 15-25 so'z).
 `;
 
 export default async function handler(req, res) {
@@ -64,7 +71,7 @@ export default async function handler(req, res) {
           .filter(Boolean) || [];
 
         if (!parsed.full_script) parsed.full_script = parsed.script_segments?.join(" ") || `${topic} ismining ma'nosi juda ajoyib.`;
-        if (!parsed.image_prompts_en?.length) parsed.image_prompts_en = [`Cinematic beautiful typography of name ${topic}`];
+        if (!parsed.image_prompts_en?.length) parsed.image_prompts_en = ["Cinematic atmospheric background, soft warm light, elegant and aesthetic, no text"];
         if (parsed.image_prompts_en.length > 4) parsed.image_prompts_en = parsed.image_prompts_en.slice(0, 4);
 
         return res.status(200).json({ ...parsed, sources });

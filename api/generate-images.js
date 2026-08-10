@@ -9,11 +9,17 @@ const HD_WALLPAPERS = [
   "/fallback/drink.jpg",
 ];
 
+// Image models spell text as garbled glyphs, and for Uzbek names they tend to add Arabic
+// calligraphy unprompted. The name is carried by the subtitles, never by the image.
+// Keep this short: a long negation list ("no text, no letters, no words, no numbers, …")
+// makes the model return an empty response with no image part at all.
+const NO_TEXT_RULE = ", without any writing or lettering";
+
 const STYLE_SUFFIXES = [
-  ", luxurious royal gold style, glowing gold typography on obsidian black marble, ambient warm glowing lights, elegant and high-end atmosphere, cinematic lighting, 8k, vertical 9:16 aspect ratio",
-  ", cosmic starry sky style, glowing neon nebula background, deep indigo and violet space tones, ethereal light flares, bokeh, highly aesthetic, 8k, vertical 9:16 aspect ratio",
-  ", magical fantasy forest style, glowing emerald and sapphire light beams, sun rays filtering through trees, enchanted mystical atmosphere, extremely photorealistic, 8k, vertical 9:16 aspect ratio",
-  ", cinematic emotional portrait style, warm sunset golden hour, soft light pastel tones, dreamlike atmosphere, highly artistic and elegant background, 8k, vertical 9:16 aspect ratio",
+  ", luxurious royal gold and obsidian black marble surfaces, ambient warm glowing light, elegant high-end atmosphere, cinematic lighting, 8k" + NO_TEXT_RULE,
+  ", cosmic starry sky, glowing nebula in deep indigo and violet tones, ethereal light flares, bokeh, highly aesthetic, 8k" + NO_TEXT_RULE,
+  ", magical forest, glowing emerald and sapphire light beams, sun rays filtering through trees, enchanted mystical atmosphere, extremely photorealistic, 8k" + NO_TEXT_RULE,
+  ", cinematic warm sunset golden hour, soft pastel tones, dreamlike atmosphere, highly artistic and elegant background, 8k" + NO_TEXT_RULE,
 ];
 
 export default async function handler(req, res) {
@@ -38,7 +44,10 @@ export default async function handler(req, res) {
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-image",
         contents: [{ role: "user", parts: [{ text: enhanced }] }],
-        config: { responseModalities: ["IMAGE", "TEXT"] },
+        // Ask the API for 9:16 rather than describing it in the prompt — prompt text alone
+        // yields a 1024x1024 square, which the player then crops to fit, cutting away ~44%
+        // of the composition. This returns a true 768x1344 vertical frame.
+        config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
       });
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
       if (!part?.inlineData?.data) throw new Error("Rasm ma'lumoti topilmadi");
