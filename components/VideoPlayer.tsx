@@ -60,6 +60,12 @@ interface Particle {
 
 const OUTRO_DURATION = 9.0; // 9 seconds for Luxe Core branding & advert showcase
 
+// The active-word highlight badge is drawn this far past the word on each side. A plain
+// space (~14px at 54px Inter) is narrower than that, so laying words out by space width
+// made every badge paint over the tail of the previous word.
+const CAPTION_BADGE_PAD_X = 20;
+const CAPTION_WORD_GAP = CAPTION_BADGE_PAD_X + 12;
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   images, 
   audioBase64, 
@@ -409,8 +415,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     const fontSize = 54; 
     ctx.font = `900 ${fontSize}px Inter, sans-serif`;
-    const maxWidth = WIDTH - 160; 
-    const spaceWidth = ctx.measureText(' ').width;
+    const maxWidth = WIDTH - 160;
 
     return scriptSegments.map(segmentText => {
       const segmentCharCount = segmentText.length;
@@ -440,14 +445,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       wordTimings.forEach((wt) => {
          const wWidth = wt.width || 0;
-         const potentialWidth = currentLineWidth + wWidth + (currentLineWords.length > 0 ? spaceWidth : 0);
+         const potentialWidth = currentLineWidth + wWidth + (currentLineWords.length > 0 ? CAPTION_WORD_GAP : 0);
 
          if (potentialWidth > maxWidth && currentLineWords.length > 0) {
              lines.push({ words: currentLineWords, totalWidth: currentLineWidth });
              currentLineWords = [wt];
              currentLineWidth = wWidth;
          } else {
-             if (currentLineWords.length > 0) currentLineWidth += spaceWidth;
+             if (currentLineWords.length > 0) currentLineWidth += CAPTION_WORD_GAP;
              currentLineWords.push(wt);
              currentLineWidth += wWidth;
          }
@@ -788,7 +793,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const fontSize = 54;
         ctx.font = `900 ${fontSize}px Inter, sans-serif`;
         ctx.textBaseline = 'middle';
-        const spaceWidth = ctx.measureText(' ').width;
 
         ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
         ctx.shadowBlur = 15;
@@ -832,54 +836,80 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                ctx.restore();
              }
 
-             line.words.forEach((wt) => {
-                const isWordActive = time >= wt.start && time < wt.end;
-                
-                ctx.save();
-                
-                let wordScale = 1.0;
-                let yOffset = 0;
+             // Lay the line out up front, then paint the active word's highlight badge before
+             // any glyphs. Drawn inline, the badge lands on top of whichever neighbour it
+             // overlaps once the word pops past its own box.
+             const wordX: number[] = [];
+             {
+                let x = currentX;
+                line.words.forEach((wt) => { wordX.push(x); x += (wt.width || 0) + CAPTION_WORD_GAP; });
+             }
 
-                if (isWordActive) {
-                    // CapCut / TikTok Spring Pop & Bounce Animation
-                    const wordDuration = Math.max(0.1, wt.end - wt.start);
-                    const activeProgress = Math.min(1, Math.max(0, (time - wt.start) / wordDuration));
-                    wordScale = 1.0 + 0.22 * Math.sin(activeProgress * Math.PI); // Elastic pop curve
-                    yOffset = -4 * Math.sin(activeProgress * Math.PI); // Subtle float
+             const popFor = (wt: WordTiming) => {
+                if (!(time >= wt.start && time < wt.end)) return { scale: 1.0, yOffset: 0 };
+                // CapCut / TikTok Spring Pop & Bounce Animation
+                const wordDuration = Math.max(0.1, wt.end - wt.start);
+                const activeProgress = Math.min(1, Math.max(0, (time - wt.start) / wordDuration));
+                return {
+                    scale: 1.0 + 0.22 * Math.sin(activeProgress * Math.PI), // Elastic pop curve
+                    yOffset: -4 * Math.sin(activeProgress * Math.PI)         // Subtle float
+                };
+             };
+
+             const badgeFill: Record<string, { fill: string; glow: string }> = {
+                [CaptionStyle.INSTAGRAM_WHITE]: { fill: '#ffffff', glow: 'rgba(255, 255, 255, 0.8)' },
+                [CaptionStyle.NEON_GLOW]: { fill: '#06b6d4', glow: 'rgba(6, 182, 212, 0.9)' },
+                [CaptionStyle.TIKTOK_YELLOW]: { fill: '#facc15', glow: 'rgba(250, 204, 21, 0.75)' }
+             };
+
+             line.words.forEach((wt, idx) => {
+                if (!(time >= wt.start && time < wt.end)) return;
+                const style = badgeFill[captionStyle] || badgeFill[CaptionStyle.TIKTOK_YELLOW];
+                const { scale, yOffset } = popFor(wt);
+                const wWidth = wt.width || 0;
+                const cx = wordX[idx] + wWidth / 2;
+                const cy = yPos + yOffset;
+                const bW = wWidth + CAPTION_BADGE_PAD_X * 2;
+                const bH = fontSize + 14;
+
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(scale, scale);
+                ctx.translate(-cx, -cy);
+                ctx.fillStyle = style.fill;
+                ctx.shadowColor = style.glow;
+                ctx.shadowBlur = 24;
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                  ctx.roundRect(wordX[idx] - CAPTION_BADGE_PAD_X, cy - bH / 2, bW, bH, 18);
+                } else {
+                  ctx.rect(wordX[idx] - CAPTION_BADGE_PAD_X, cy - bH / 2, bW, bH);
                 }
-                
+                ctx.fill();
+                ctx.restore();
+             });
+
+             line.words.forEach((wt, idx) => {
+                const isWordActive = time >= wt.start && time < wt.end;
+
+                ctx.save();
+
+                const { scale: wordScale, yOffset } = popFor(wt);
+
+                currentX = wordX[idx];
                 const wWidth = wt.width || 0;
                 const wordCenterX = currentX + wWidth / 2;
                 const wordCenterY = yPos + yOffset;
-                
+
                 ctx.translate(wordCenterX, wordCenterY);
                 ctx.scale(wordScale, wordScale);
                 ctx.translate(-wordCenterX, -wordCenterY);
 
+                // Badges were already painted in the pass above, so this only draws glyphs.
+                ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
+
                 if (captionStyle === CaptionStyle.INSTAGRAM_WHITE) {
-                  ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
                   if (isWordActive) {
-                    // CapCut Instagram Active White Badge
-                    const badgePadX = 18;
-                    const badgePadY = 14;
-                    const bW = wWidth + badgePadX * 2;
-                    const bH = fontSize + badgePadY;
-                    const bX = currentX - badgePadX;
-                    const bY = (yPos + yOffset) - bH / 2;
-
-                    ctx.save();
-                    ctx.fillStyle = '#ffffff';
-                    ctx.shadowColor = 'rgba(255, 255, 255, 0.8)';
-                    ctx.shadowBlur = 22;
-                    ctx.beginPath();
-                    if (ctx.roundRect) {
-                      ctx.roundRect(bX, bY, bW, bH, 16);
-                    } else {
-                      ctx.rect(bX, bY, bW, bH);
-                    }
-                    ctx.fill();
-                    ctx.restore();
-
                     ctx.shadowColor = 'transparent';
                     ctx.fillStyle = '#000000';
                     ctx.fillText(wt.word, currentX, yPos + yOffset);
@@ -890,29 +920,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     ctx.fillText(wt.word, currentX, yPos + yOffset);
                   }
                 } else if (captionStyle === CaptionStyle.NEON_GLOW) {
-                  ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
                   if (isWordActive) {
-                    // CapCut Neon Cyan Active Badge
-                    const badgePadX = 18;
-                    const badgePadY = 14;
-                    const bW = wWidth + badgePadX * 2;
-                    const bH = fontSize + badgePadY;
-                    const bX = currentX - badgePadX;
-                    const bY = (yPos + yOffset) - bH / 2;
-
-                    ctx.save();
-                    ctx.fillStyle = '#06b6d4'; // Cyan neon badge
-                    ctx.shadowColor = 'rgba(6, 182, 212, 0.9)';
-                    ctx.shadowBlur = 30;
-                    ctx.beginPath();
-                    if (ctx.roundRect) {
-                      ctx.roundRect(bX, bY, bW, bH, 16);
-                    } else {
-                      ctx.rect(bX, bY, bW, bH);
-                    }
-                    ctx.fill();
-                    ctx.restore();
-
                     ctx.shadowColor = 'transparent';
                     ctx.fillStyle = '#0f172a'; // Dark obsidian text on cyan
                     ctx.fillText(wt.word, currentX, yPos + yOffset);
@@ -928,28 +936,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   }
                 } else {
                   // CaptionStyle.TIKTOK_YELLOW (CapCut Standard TikTok Style)
-                  ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
                   if (isWordActive) {
-                    const badgePadX = 20;
-                    const badgePadY = 14;
-                    const bW = wWidth + badgePadX * 2;
-                    const bH = fontSize + badgePadY;
-                    const bX = currentX - badgePadX;
-                    const bY = (yPos + yOffset) - bH / 2;
-
-                    ctx.save();
-                    ctx.fillStyle = '#facc15'; // High-contrast TikTok Yellow
-                    ctx.shadowColor = 'rgba(250, 204, 21, 0.75)';
-                    ctx.shadowBlur = 24;
-                    ctx.beginPath();
-                    if (ctx.roundRect) {
-                      ctx.roundRect(bX, bY, bW, bH, 18);
-                    } else {
-                      ctx.rect(bX, bY, bW, bH);
-                    }
-                    ctx.fill();
-                    ctx.restore();
-
                     ctx.shadowColor = 'transparent';
                     ctx.fillStyle = '#000000';
                     ctx.fillText(wt.word, currentX, yPos + yOffset);
@@ -965,8 +952,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 }
                 
                 ctx.restore();
-
-                currentX += wWidth + spaceWidth;
               });
         }
     }
