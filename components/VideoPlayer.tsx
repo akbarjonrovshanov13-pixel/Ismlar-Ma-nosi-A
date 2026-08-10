@@ -1189,8 +1189,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       const chunks: BlobPart[] = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-      
+
+      // Frame ticks are driven by a Worker rather than requestAnimationFrame: browsers pause
+      // rAF (and throttle main-thread timers) while a tab is hidden, which would freeze both
+      // the recording and its stop condition if the user switches tabs mid-download.
+      let ticker: Worker | null = null;
+      let rafId: number | null = null;
+      let finished = false;
+
+      const stopTicker = () => {
+          if (ticker) { ticker.terminate(); ticker = null; }
+          if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      };
+
       recorder.onstop = () => {
+          stopTicker();
           const blob = new Blob(chunks, { type: mimeType });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -1214,11 +1227,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const recStartTime = performance.now();
       let lastProgressUpdate = 0;
 
-      const recordLoop = () => {
+      const recordFrame = () => {
+          if (finished) return;
+
           const now = performance.now();
           const elapsed = (now - recStartTime) / 1000;
 
           if (elapsed >= duration) {
+               finished = true;
+               stopTicker();
                setDownloadProgress(100);
                setTimeout(() => recorder.stop(), 300);
                return;
@@ -1231,10 +1248,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
              setDownloadProgress(pct);
              lastProgressUpdate = now;
           }
-
-          requestAnimationFrame(recordLoop);
       };
-      requestAnimationFrame(recordLoop);
+
+      try {
+          const tickerSrc = `let id=null;onmessage=(e)=>{if(e.data==='start'){id=setInterval(()=>postMessage(0),${Math.round(1000 / FPS)});}else{clearInterval(id);}};`;
+          const tickerUrl = URL.createObjectURL(new Blob([tickerSrc], { type: "application/javascript" }));
+          ticker = new Worker(tickerUrl);
+          URL.revokeObjectURL(tickerUrl);
+          ticker.onmessage = recordFrame;
+          ticker.postMessage("start");
+      } catch (e) {
+          // Worker unavailable — fall back to rAF, which still works while the tab stays visible.
+          console.warn("Recording ticker worker unavailable, falling back to rAF:", e);
+          const rafLoop = () => {
+              recordFrame();
+              if (!finished) rafId = requestAnimationFrame(rafLoop);
+          };
+          rafId = requestAnimationFrame(rafLoop);
+      }
   };
 
   return (
