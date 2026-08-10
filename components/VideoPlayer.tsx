@@ -1184,7 +1184,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       const recorder = new MediaRecorder(stream, {
           mimeType: mimeType,
-          videoBitsPerSecond: 14000000 // 14 Mbps HD Quality
+          // 6 Mbps: the frames are slow Ken Burns pans over stills, so the extra headroom
+          // 14 Mbps bought was spent on a ~3x larger file (187MB for ~2min) with no visible
+          // gain. This still exceeds Instagram/TikTok's own re-encode target for 1080x1920.
+          videoBitsPerSecond: 6000000,
+          audioBitsPerSecond: 128000
       });
 
       const chunks: BlobPart[] = [];
