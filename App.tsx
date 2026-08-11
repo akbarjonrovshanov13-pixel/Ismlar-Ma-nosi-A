@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, ImageMode, VideoData, VoiceType, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
-import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas } from './services/geminiService';
+import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt } from './services/geminiService';
 import { CATEGORIZED_TOPICS, TOPIC_CATEGORIES } from './constants';
 import VideoPlayer from './components/VideoPlayer';
 import { ScriptEditorModal } from './components/ScriptEditorModal';
@@ -24,6 +24,9 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 
 const DEFAULT_OUTRO_TEXT = "Ismni eslab qoldingiz. Endi bizni ham eslab qoling: Luxe Core — qadoqlash uchun kerakli hamma narsa.";
 
+// Matches the ten premium name-art concepts in api/generate-name-art.js, so a full set fits.
+const MAX_USER_IMAGES = 10;
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [topic, setTopic] = useState('');
@@ -33,6 +36,9 @@ const App: React.FC = () => {
   const [hookStyle, setHookStyle] = useState<HookStyle>(HookStyle.RANDOM);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(CaptionStyle.TIKTOK_YELLOW);
   const [userImages, setUserImages] = useState<string[]>([]);
+  const [nameArtStatus, setNameArtStatus] = useState<string | null>(null);
+  const [isGeneratingNameArt, setIsGeneratingNameArt] = useState(false);
+  const [nameArtGender, setNameArtGender] = useState<'FEMALE' | 'MALE' | 'UNISEX'>('UNISEX');
   const [customOutroImages, setCustomOutroImages] = useState<string[]>([]);
   const [showIdeas, setShowIdeas] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -195,12 +201,53 @@ const App: React.FC = () => {
     img.src = dataUrl;
   });
 
+  // Walks the ten premium concepts one request at a time. Batching them would blow both the
+  // per-minute image quota and the 60s function ceiling, so each concept is its own call and a
+  // quota rejection just skips that concept rather than failing the whole run.
+  const handleGenerateNameArt = async () => {
+    if (!topic.trim() || isGeneratingNameArt) return;
+
+    setIsGeneratingNameArt(true);
+    const slots = MAX_USER_IMAGES - userImages.length;
+    let made = 0;
+    let quotaHits = 0;
+
+    try {
+      for (let i = 0; i < 10 && made < slots; i++) {
+        setNameArtStatus(`${i + 1}/10 — ${topic} uchun rasm yaratilmoqda...`);
+        const result = await generateNameArt(topic.trim(), nameArtGender, i);
+
+        if (result.ok && result.image) {
+          made++;
+          const image = result.image;
+          setUserImages(prev => [...prev, image].slice(0, MAX_USER_IMAGES));
+        } else if (result.quota) {
+          quotaHits++;
+          // The quota window is ~1 minute; pushing on immediately just burns more rejections.
+          setNameArtStatus(`Kvota band — ${i + 1}/10 o'tkazib yuborildi, kutilmoqda...`);
+          await new Promise(r => setTimeout(r, 8000));
+        }
+
+        if (i < 9) await new Promise(r => setTimeout(r, 1200));
+      }
+
+      setImageMode(ImageMode.UPLOAD);
+      setNameArtStatus(
+        made === 0
+          ? "Hech qanday rasm yaratilmadi — AI kvotasi band. Birozdan keyin qayta urinib ko'ring."
+          : `${made} ta rasm tayyor${quotaHits ? ` (${quotaHits} tasi kvota tufayli o'tkazib yuborildi)` : ''}.`
+      );
+    } finally {
+      setIsGeneratingNameArt(false);
+    }
+  };
+
   const handleUserImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const input = e.target;
     const files = Array.from(input.files || []);
     if (!files.length) return;
 
-    const remainingSlots = 6 - userImages.length;
+    const remainingSlots = MAX_USER_IMAGES - userImages.length;
     if (remainingSlots <= 0) return;
 
     const read = (file: File) => new Promise<string>((resolve) => {
@@ -213,7 +260,7 @@ const App: React.FC = () => {
     const dataUrls = await Promise.all(files.slice(0, remainingSlots).map(read));
     const normalized = await Promise.all(dataUrls.filter(Boolean).map(normalizeTo916));
 
-    setUserImages(prev => [...prev, ...normalized].slice(0, 6));
+    setUserImages(prev => [...prev, ...normalized].slice(0, MAX_USER_IMAGES));
     input.value = ''; // let the same file be picked again after a removal
   };
 
@@ -624,7 +671,7 @@ const App: React.FC = () => {
                   }`}
                 >
                   <span className="text-xs font-bold block">📁 O'z rasmlarim</span>
-                  <span className="text-[9px] opacity-75 mt-1">6 tagacha, 9:16</span>
+                  <span className="text-[9px] opacity-75 mt-1">{MAX_USER_IMAGES} tagacha, 9:16</span>
                 </button>
               </div>
 
@@ -645,7 +692,7 @@ const App: React.FC = () => {
                       </div>
                     ))}
 
-                    {userImages.length < 6 && (
+                    {userImages.length < MAX_USER_IMAGES && (
                       <label className="aspect-[9/16] rounded-lg border border-dashed border-slate-700 bg-slate-950 flex flex-col items-center justify-center gap-1 cursor-pointer text-slate-500 hover:text-emerald-300 hover:border-emerald-500/40 transition">
                         <span className="text-lg leading-none">+</span>
                         <span className="text-[9px]">Yuklash</span>
@@ -661,9 +708,45 @@ const App: React.FC = () => {
                   </div>
                   <p className="text-[9px] text-slate-500 leading-tight">
                     {userImages.length > 0
-                      ? `${userImages.length}/6 rasm tanlandi. Har biri avtomatik 9:16 (1080×1920) formatiga keltiriladi.`
+                      ? `${userImages.length}/${MAX_USER_IMAGES} rasm tanlandi. Har biri avtomatik 9:16 (1080×1920) formatiga keltiriladi.`
                       : "Istalgan o'lchamdagi rasmlarni yuklang — ular avtomatik 9:16 (1080×1920) formatiga keltiriladi."}
                   </p>
+
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                    <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">🎨 Premium Name Art</label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(['FEMALE', 'MALE', 'UNISEX'] as const).map(g => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setNameArtGender(g)}
+                          className={`py-1.5 rounded-lg text-[10px] font-bold border transition ${
+                            nameArtGender === g
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                              : 'bg-slate-950 border-slate-800 text-slate-500 hover:text-slate-300'
+                          }`}
+                        >
+                          {g === 'FEMALE' ? '👩 Ayol' : g === 'MALE' ? '👨 Erkak' : '⚪ Umumiy'}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGenerateNameArt}
+                      disabled={!topic.trim() || isGeneratingNameArt || userImages.length >= MAX_USER_IMAGES}
+                      className="w-full p-3 rounded-xl text-xs font-bold transition bg-gradient-to-r from-amber-500 to-purple-600 text-white disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500"
+                    >
+                      {isGeneratingNameArt ? '⏳ Yaratilmoqda...' : `✨ ${topic.trim() || 'Ism'} uchun 10 ta san'at rasmi`}
+                    </button>
+
+                    {nameArtStatus && (
+                      <p className="text-[9px] text-amber-300/90 leading-tight">{nameArtStatus}</p>
+                    )}
+                    <p className="text-[9px] text-slate-500 leading-tight">
+                      10 xil uslub: Royal, Tabiat, Kosmos, Shahar, Minimal, Gul, Olov, Rang, Kristall, Ramziy. Har biri alohida yaratiladi — 1-2 daqiqa vaqt oladi.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

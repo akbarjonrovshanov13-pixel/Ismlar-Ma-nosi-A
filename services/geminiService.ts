@@ -95,6 +95,33 @@ export const generateImages = async (prompts: string[], topic?: string): Promise
   return [];
 };
 
+export type NameArtResult = { ok: boolean; image?: string; label?: string; quota?: boolean };
+
+// One concept per call. The endpoint deliberately renders a single artwork rather than a set —
+// the image quota is per-minute and the function has a 60s ceiling, so the ten concepts are
+// walked one request at a time from here.
+export const generateNameArt = async (
+  name: string,
+  gender: string,
+  conceptIndex: number
+): Promise<NameArtResult> => {
+  try {
+    const res = await fetch(`${API_BASE}/generate-name-art.js`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, gender, conceptIndex }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.image) return { ok: true, image: data.image, label: data.label };
+    }
+    return { ok: false, quota: res.status === 429 };
+  } catch (err) {
+    console.warn("Name art generation unavailable:", err);
+    return { ok: false, quota: false };
+  }
+};
+
 export const findImages = async (topic: string): Promise<string[]> => {
   // Backend serverless endpoint orqali (Google Search grounding)
   try {
