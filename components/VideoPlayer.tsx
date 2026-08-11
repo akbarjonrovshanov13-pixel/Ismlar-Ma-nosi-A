@@ -402,19 +402,22 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (images.length > 0) processImages();
   }, [images]);
 
-  // How long the closing Luxe Core line actually takes to speak. The old fixed 9s was measured
-  // against real TTS at ~8.0s, so every subtitle was squeezed into a second less than it had
-  // and ran early by the end. Deriving it from the outro's share of the script halves that
-  // error (0.44s vs 1.04s measured) and follows along when the outro text is edited.
+  // How long the closing Luxe Core line takes to speak. Subtitles are laid out across the time
+  // before it, so this value decides where every caption lands.
+  //
+  // Measured against the live TTS: the closing line runs at ~12.5 characters per second, while
+  // the script body averages ~11.2 — it is plain narration where the script is full of
+  // exclamations and dramatic pauses. Sizing the outro from its share of the script therefore
+  // overshoots (8.89s against a true 7.96s in a real export); sizing it from its own character
+  // count and its own rate lands within a few hundredths, and still tracks an edited outro.
+  const OUTRO_CHARS_PER_SECOND = 12.5;
   const outroDuration = useMemo(() => {
     if (!duration) return OUTRO_DURATION;
-    const scriptChars = scriptSegments.join(" ").length;
     const outroChars = (outroText || "").trim().length;
-    if (!scriptChars || !outroChars) return Math.min(OUTRO_DURATION, duration * 0.25);
-    const share = outroChars / (scriptChars + outroChars);
-    // Clamp so a malformed script can't hand the outro the whole video or none of it.
-    return Math.min(Math.max(duration * share, 2), duration * 0.4);
-  }, [duration, scriptSegments, outroText]);
+    if (!outroChars) return Math.min(OUTRO_DURATION, duration * 0.25);
+    // Clamp so an empty or runaway outro can't swallow the video or vanish entirely.
+    return Math.min(Math.max(outroChars / OUTRO_CHARS_PER_SECOND, 2), duration * 0.4);
+  }, [duration, outroText]);
 
   // 3. Subtitle Calculation (Same logic)
   const preparedSubtitles = useMemo<PreparedSubtitle[]>(() => {
