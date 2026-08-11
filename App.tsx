@@ -969,7 +969,8 @@ const App: React.FC = () => {
                   audioBase64={state.videoData.audioBase64 || ""} 
                   scriptSegments={state.videoData.script} 
                   topic={state.videoData.topic} 
-                  customOutroImages={adConfig.customOutroImages} 
+                  customOutroImages={adConfig.customOutroImages}
+                  outroText={draftOutroText}
                   captionStyle={captionStyle}
                   watermarkText={adConfig.watermarkText}
                   watermarkPosition={adConfig.watermarkPosition}

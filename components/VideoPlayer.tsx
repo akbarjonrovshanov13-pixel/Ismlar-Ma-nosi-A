@@ -7,6 +7,7 @@ interface VideoPlayerProps {
   scriptSegments: string[];
   topic: string;
   customOutroImages?: string[];
+  outroText?: string;
   captionStyle?: CaptionStyle;
   watermarkText?: string;
   watermarkPosition?: WatermarkPosition;
@@ -72,6 +73,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   scriptSegments, 
   topic, 
   customOutroImages,
+  outroText,
   captionStyle = CaptionStyle.TIKTOK_YELLOW,
   watermarkText = "✨ @luxe_core_uz",
   watermarkPosition = WatermarkPosition.TOP_RIGHT,
@@ -400,12 +402,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (images.length > 0) processImages();
   }, [images]);
 
+  // How long the closing Luxe Core line actually takes to speak. The old fixed 9s was measured
+  // against real TTS at ~8.0s, so every subtitle was squeezed into a second less than it had
+  // and ran early by the end. Deriving it from the outro's share of the script halves that
+  // error (0.44s vs 1.04s measured) and follows along when the outro text is edited.
+  const outroDuration = useMemo(() => {
+    if (!duration) return OUTRO_DURATION;
+    const scriptChars = scriptSegments.join(" ").length;
+    const outroChars = (outroText || "").trim().length;
+    if (!scriptChars || !outroChars) return Math.min(OUTRO_DURATION, duration * 0.25);
+    const share = outroChars / (scriptChars + outroChars);
+    // Clamp so a malformed script can't hand the outro the whole video or none of it.
+    return Math.min(Math.max(duration * share, 2), duration * 0.4);
+  }, [duration, scriptSegments, outroText]);
+
   // 3. Subtitle Calculation (Same logic)
   const preparedSubtitles = useMemo<PreparedSubtitle[]>(() => {
     if (!scriptSegments.length || duration === 0) return [];
 
-    // All name meaning subtitles will end OUTRO_DURATION before the audio ends, giving space to the Luxe Core outro
-    const nameDuration = Math.max(1, duration - OUTRO_DURATION);
+    // Subtitles cover everything up to the point the outro line starts being spoken.
+    const nameDuration = Math.max(1, duration - outroDuration);
     const totalCharsInScript = scriptSegments.reduce((acc, seg) => acc + seg.length, 0);
     let globalElapsed = 0;
 
@@ -463,7 +479,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       return { start: segmentStart, end: segmentEnd, lines };
     });
-  }, [scriptSegments, duration]);
+  }, [scriptSegments, duration, outroDuration]);
 
 
   const drawLayer = useCallback((ctx: CanvasRenderingContext2D, layer: ProcessedImageLayer, progress: number, opacity: number) => {
@@ -495,11 +511,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // --- Luxe Core Outro Check (last OUTRO_DURATION seconds) ---
-    const isOutro = duration > OUTRO_DURATION && time >= (duration - OUTRO_DURATION);
+    // --- Luxe Core Outro Check (starts when the closing line starts being spoken) ---
+    const isOutro = duration > outroDuration && time >= (duration - outroDuration);
 
     if (isOutro) {
-        const outroTime = time - (duration - OUTRO_DURATION); // ranges from 0 to OUTRO_DURATION
+        const outroTime = time - (duration - outroDuration); // ranges from 0 to outroDuration
         
         if (outroTime < 5.0) {
             // "Avval quti, paket, lenta va bir martalik idishlardan tez kadrlar ko‘rinsin"
@@ -712,7 +728,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     // --- Normal Slides Presentation ---
     const totalImages = processedLayers.length;
-    const nameDuration = duration > OUTRO_DURATION ? duration - OUTRO_DURATION : (duration > 0 ? duration : 5);
+    const nameDuration = duration > outroDuration ? duration - outroDuration : (duration > 0 ? duration : 5);
     const slotDuration = nameDuration / totalImages;
     
     let currentIndex = Math.floor(time / slotDuration);
@@ -1061,7 +1077,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         ctx.restore();
     }
 
-  }, [processedLayers, duration, preparedSubtitles, drawLayer]);
+  }, [processedLayers, duration, preparedSubtitles, drawLayer, outroDuration]);
 
   // 5. Animation Loop (Playback)
   const animate = useCallback(() => {
