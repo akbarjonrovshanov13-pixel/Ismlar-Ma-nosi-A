@@ -97,6 +97,102 @@ export const generateImages = async (prompts: string[], topic?: string): Promise
 
 export type AlignedWord = { start: number; end: number } | null;
 
+// TTS returns raw 16-bit mono PCM at 24kHz.
+const PCM_BYTES_PER_SECOND = 24000 * 2;
+// Synchronous recognition caps out near a minute, and the whole narration (~5MB of PCM) is far
+// past the request body limit, so it goes up in pieces.
+const ALIGN_CHUNK_SECONDS = 40;
+
+// Uzbek writes the apostrophe several ways (' ʼ ‘ ’ `) and the recogniser adds its own
+// capitalisation and punctuation, so both sides are flattened before comparing.
+const normaliseWord = (word: string) =>
+  word
+    .toLowerCase()
+    .replace(/[’‘ʼ`´]/g, "'")
+    .replace(/[^\p{L}\p{N}']/gu, "")
+    .trim();
+
+const base64ToBytes = (base64: string): Uint8Array => {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+};
+
+const bytesToBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  const step = 0x8000; // chunked so the argument list stays within engine limits
+  for (let i = 0; i < bytes.length; i += step) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + step));
+  }
+  return btoa(binary);
+};
+
+// Cut on the quietest 20ms window near the boundary so a word is less likely to be split.
+const findQuietSplit = (bytes: Uint8Array, targetByte: number): number => {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const window = Math.floor(0.02 * PCM_BYTES_PER_SECOND) & ~1;
+  const search = 2 * PCM_BYTES_PER_SECOND;
+  const from = Math.max(0, targetByte - search);
+  const to = Math.min(bytes.length - window, targetByte + search);
+  if (to <= from) return targetByte;
+
+  let best = targetByte;
+  let bestEnergy = Infinity;
+  for (let pos = from; pos < to; pos += window) {
+    let energy = 0;
+    for (let i = pos; i < pos + window; i += 2) energy += Math.abs(view.getInt16(i, true));
+    if (energy < bestEnergy) {
+      bestEnergy = energy;
+      best = pos;
+    }
+  }
+  return best & ~1;
+};
+
+type HeardWord = { word: string; start: number; end: number };
+
+// Greedy match with lookahead: the recogniser is accurate but drops, merges and respells the
+// odd word, so anything unmatched inside the window is left for interpolation.
+const alignToScript = (scriptWords: string[], heard: HeardWord[]): AlignedWord[] => {
+  const timings: AlignedWord[] = new Array(scriptWords.length).fill(null);
+  const LOOKAHEAD = 6;
+  let h = 0;
+
+  for (let s = 0; s < scriptWords.length && h < heard.length; s++) {
+    const target = normaliseWord(scriptWords[s]);
+    if (!target) continue;
+    for (let k = 0; k < LOOKAHEAD && h + k < heard.length; k++) {
+      const spoken = normaliseWord(heard[h + k].word);
+      if (!spoken) continue;
+      if (spoken === target || spoken.includes(target) || target.includes(spoken)) {
+        timings[s] = { start: heard[h + k].start, end: heard[h + k].end };
+        h = h + k + 1;
+        break;
+      }
+    }
+  }
+
+  // Spread the surrounding known times evenly across each untimed run.
+  let lastKnown = -1;
+  for (let i = 0; i <= timings.length; i++) {
+    if (i === timings.length || timings[i]) {
+      const gap = i - lastKnown - 1;
+      if (gap > 0) {
+        const from = lastKnown >= 0 ? timings[lastKnown]!.end : 0;
+        const to = i < timings.length ? timings[i]!.start : from + gap * 0.35;
+        const step = (to - from) / gap;
+        for (let g = 0; g < gap; g++) {
+          timings[lastKnown + 1 + g] = { start: from + step * g, end: from + step * (g + 1) };
+        }
+      }
+      lastKnown = i;
+    }
+  }
+
+  return timings;
+};
+
 // Real word timings from Speech-to-Text, so captions land on the spoken word instead of being
 // estimated from character counts. Returns null on any failure — the player then falls back to
 // its own estimate, so a video is never blocked on this.
@@ -105,19 +201,53 @@ export const alignSubtitles = async (
   segments: string[]
 ): Promise<AlignedWord[][] | null> => {
   if (!audio || !segments.length) return null;
+
   try {
-    const res = await fetch(`${API_BASE}/align-subtitles.js`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio, segments }),
+    const pcm = base64ToBytes(audio);
+    const chunkBytes = ALIGN_CHUNK_SECONDS * PCM_BYTES_PER_SECOND;
+
+    const pieces: { data: string; offsetSec: number }[] = [];
+    let start = 0;
+    while (start < pcm.length) {
+      const target = start + chunkBytes;
+      const end = target >= pcm.length ? pcm.length : findQuietSplit(pcm, target);
+      pieces.push({
+        data: bytesToBase64(pcm.subarray(start, end)),
+        offsetSec: start / PCM_BYTES_PER_SECOND,
+      });
+      start = end;
+    }
+
+    const results = await Promise.all(
+      pieces.map(async ({ data, offsetSec }) => {
+        const res = await fetch(`${API_BASE}/align-subtitles.js`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ audioChunk: data, offsetSec }),
+        });
+        if (!res.ok) return [] as HeardWord[];
+        const json = await res.json();
+        return (json.words || []) as HeardWord[];
+      })
+    );
+
+    const heard = results.flat().sort((a, b) => a.start - b.start);
+    if (!heard.length) return null;
+
+    const perSegment = segments.map((s) => s.split(/\s+/).filter(Boolean));
+    const flat = perSegment.flat();
+    const timings = alignToScript(flat, heard);
+
+    let cursor = 0;
+    return perSegment.map((words) => {
+      const slice = timings.slice(cursor, cursor + words.length);
+      cursor += words.length;
+      return slice;
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data.aligned && Array.isArray(data.segments)) return data.segments;
   } catch (err) {
     console.warn("Subtitle alignment unavailable:", err);
+    return null;
   }
-  return null;
 };
 
 export type NameArtResult = { ok: boolean; image?: string; label?: string; quota?: boolean };
