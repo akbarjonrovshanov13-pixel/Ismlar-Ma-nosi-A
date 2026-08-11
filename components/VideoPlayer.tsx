@@ -8,6 +8,9 @@ interface VideoPlayerProps {
   topic: string;
   customOutroImages?: string[];
   outroText?: string;
+  // Real per-word timings from Speech-to-Text, grouped per script segment. Absent or
+  // mismatched, the character-count estimate below takes over.
+  wordTimings?: ({ start: number; end: number } | null)[][] | null;
   captionStyle?: CaptionStyle;
   watermarkText?: string;
   watermarkPosition?: WatermarkPosition;
@@ -67,6 +70,32 @@ const OUTRO_DURATION = 9.0; // 9 seconds for Luxe Core branding & advert showcas
 const CAPTION_BADGE_PAD_X = 20;
 const CAPTION_WORD_GAP = CAPTION_BADGE_PAD_X + 12;
 
+// Wraps a segment's words into rendered lines. Shared by both timing paths so real and
+// estimated captions break identically.
+function buildLines(words: WordTiming[], maxWidth: number): SubtitleLine[] {
+  const lines: SubtitleLine[] = [];
+  let current: WordTiming[] = [];
+  let width = 0;
+
+  words.forEach((wt) => {
+    const wWidth = wt.width || 0;
+    const potential = width + wWidth + (current.length > 0 ? CAPTION_WORD_GAP : 0);
+
+    if (potential > maxWidth && current.length > 0) {
+      lines.push({ words: current, totalWidth: width });
+      current = [wt];
+      width = wWidth;
+    } else {
+      if (current.length > 0) width += CAPTION_WORD_GAP;
+      current.push(wt);
+      width += wWidth;
+    }
+  });
+  if (current.length > 0) lines.push({ words: current, totalWidth: width });
+
+  return lines;
+}
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ 
   images, 
   audioBase64, 
@@ -74,6 +103,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   topic, 
   customOutroImages,
   outroText,
+  wordTimings,
   captionStyle = CaptionStyle.TIKTOK_YELLOW,
   watermarkText = "✨ @luxe_core_uz",
   watermarkPosition = WatermarkPosition.TOP_RIGHT,
@@ -436,7 +466,37 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     ctx.font = `900 ${fontSize}px Inter, sans-serif`;
     const maxWidth = WIDTH - 160;
 
-    return scriptSegments.map(segmentText => {
+    // Only trust the aligner if it covers every segment; a partial result would mix real and
+    // estimated timings on the same line and read worse than either on its own.
+    const aligned = wordTimings && wordTimings.length === scriptSegments.length
+      ? wordTimings
+      : null;
+
+    return scriptSegments.map((segmentText, segmentIndex) => {
+      const rawWords = segmentText.split(/\s+/).filter(Boolean);
+      const realTimes = aligned && aligned[segmentIndex]?.length === rawWords.length
+        ? aligned[segmentIndex]
+        : null;
+
+      if (realTimes) {
+        const first = realTimes.find(Boolean);
+        const last = [...realTimes].reverse().find(Boolean);
+        const wordTimingsForSegment: WordTiming[] = rawWords.map((word, i) => {
+          const t = realTimes[i];
+          return {
+            word,
+            start: t ? t.start : (first ? first.start : 0),
+            end: t ? t.end : (last ? last.end : 0),
+            width: ctx.measureText(word).width,
+          };
+        });
+        return {
+          start: first ? first.start : 0,
+          end: last ? last.end : 0,
+          lines: buildLines(wordTimingsForSegment, maxWidth),
+        };
+      }
+
       const segmentCharCount = segmentText.length;
       const segmentProportion = segmentCharCount / totalCharsInScript;
       const segmentDuration = nameDuration * segmentProportion;
@@ -444,9 +504,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const segmentEnd = segmentStart + segmentDuration;
       globalElapsed += segmentDuration;
 
-      const rawWords = segmentText.split(/\s+/);
       const totalCharsInSeg = segmentText.replace(/\s/g, '').length;
-      
+
       let currentWordTime = segmentStart;
 
       const wordTimings: WordTiming[] = rawWords.map(word => {
@@ -458,31 +517,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
          return { word, start, end, width: ctx.measureText(word).width };
       });
 
-      const lines: SubtitleLine[] = [];
-      let currentLineWords: WordTiming[] = [];
-      let currentLineWidth = 0;
-
-      wordTimings.forEach((wt) => {
-         const wWidth = wt.width || 0;
-         const potentialWidth = currentLineWidth + wWidth + (currentLineWords.length > 0 ? CAPTION_WORD_GAP : 0);
-
-         if (potentialWidth > maxWidth && currentLineWords.length > 0) {
-             lines.push({ words: currentLineWords, totalWidth: currentLineWidth });
-             currentLineWords = [wt];
-             currentLineWidth = wWidth;
-         } else {
-             if (currentLineWords.length > 0) currentLineWidth += CAPTION_WORD_GAP;
-             currentLineWords.push(wt);
-             currentLineWidth += wWidth;
-         }
-      });
-      if (currentLineWords.length > 0) {
-          lines.push({ words: currentLineWords, totalWidth: currentLineWidth });
-      }
-
-      return { start: segmentStart, end: segmentEnd, lines };
+      return { start: segmentStart, end: segmentEnd, lines: buildLines(wordTimings, maxWidth) };
     });
-  }, [scriptSegments, duration, outroDuration]);
+  }, [scriptSegments, duration, outroDuration, wordTimings]);
 
 
   const drawLayer = useCallback((ctx: CanvasRenderingContext2D, layer: ProcessedImageLayer, progress: number, opacity: number) => {

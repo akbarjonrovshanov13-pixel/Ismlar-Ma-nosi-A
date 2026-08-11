@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppState, ImageMode, VideoData, VoiceType, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
-import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt } from './services/geminiService';
+import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt, alignSubtitles, AlignedWord } from './services/geminiService';
 import { CATEGORIZED_TOPICS, TOPIC_CATEGORIES } from './constants';
 import VideoPlayer from './components/VideoPlayer';
 import { ScriptEditorModal } from './components/ScriptEditorModal';
@@ -36,6 +36,7 @@ const App: React.FC = () => {
   const [hookStyle, setHookStyle] = useState<HookStyle>(HookStyle.RANDOM);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(CaptionStyle.TIKTOK_YELLOW);
   const [userImages, setUserImages] = useState<string[]>([]);
+  const [subtitleTimings, setSubtitleTimings] = useState<AlignedWord[][] | null>(null);
   const [nameArtStatus, setNameArtStatus] = useState<string | null>(null);
   const [isGeneratingNameArt, setIsGeneratingNameArt] = useState(false);
   const [nameArtGender, setNameArtGender] = useState<'FEMALE' | 'MALE' | 'UNISEX'>('UNISEX');
@@ -361,7 +362,10 @@ const App: React.FC = () => {
       const fullScriptWithOutro = `${customSegments.join(" ")} ${customOutro}`.trim();
       
       const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
-      
+
+      setState(prev => ({ ...prev, loadingStep: 'Subtitrlar ovozga moslanmoqda...' }));
+      setSubtitleTimings(await alignSubtitles(audioBase64, customSegments));
+
       setState(prev => ({ ...prev, loadingStep: 'Rasmlar moslashtirilmoqda...' }));
       let finalImages: string[] = [];
       if (state.videoData && state.videoData.imageUrls.length > 0 && imageMode !== ImageMode.GENERATE) {
@@ -415,7 +419,10 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, loadingStep: 'Yoqimli ovoz yozilmoqda...' }));
       const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
       await new Promise(r => setTimeout(r, 800));
-      
+
+      setState(prev => ({ ...prev, loadingStep: 'Subtitrlar ovozga moslanmoqda...' }));
+      setSubtitleTimings(await alignSubtitles(audioBase64, scriptData.script_segments || []));
+
       setState(prev => ({ ...prev, loadingStep: 'Sehrli rasmlar va kadrlar chizilmoqda...' }));
       let finalImages: string[] = [];
       if (imageMode === ImageMode.GENERATE) {
@@ -971,6 +978,7 @@ const App: React.FC = () => {
                   topic={state.videoData.topic} 
                   customOutroImages={adConfig.customOutroImages}
                   outroText={draftOutroText}
+                  wordTimings={subtitleTimings}
                   captionStyle={captionStyle}
                   watermarkText={adConfig.watermarkText}
                   watermarkPosition={adConfig.watermarkPosition}

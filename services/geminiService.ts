@@ -95,6 +95,31 @@ export const generateImages = async (prompts: string[], topic?: string): Promise
   return [];
 };
 
+export type AlignedWord = { start: number; end: number } | null;
+
+// Real word timings from Speech-to-Text, so captions land on the spoken word instead of being
+// estimated from character counts. Returns null on any failure — the player then falls back to
+// its own estimate, so a video is never blocked on this.
+export const alignSubtitles = async (
+  audio: string,
+  segments: string[]
+): Promise<AlignedWord[][] | null> => {
+  if (!audio || !segments.length) return null;
+  try {
+    const res = await fetch(`${API_BASE}/align-subtitles.js`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audio, segments }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.aligned && Array.isArray(data.segments)) return data.segments;
+  } catch (err) {
+    console.warn("Subtitle alignment unavailable:", err);
+  }
+  return null;
+};
+
 export type NameArtResult = { ok: boolean; image?: string; label?: string; quota?: boolean };
 
 // One concept per call. The endpoint deliberately renders a single artwork rather than a set —
