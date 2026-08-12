@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { AppState, ImageMode, VideoData, VoiceType, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
 import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt, alignSubtitles, AlignedWord } from './services/geminiService';
 import { CATEGORIZED_TOPICS, TOPIC_CATEGORIES } from './constants';
+import { buildExternalImagePrompt } from './nameArtConcepts';
 import VideoPlayer from './components/VideoPlayer';
 import { ScriptEditorModal } from './components/ScriptEditorModal';
 import { SavedProjectsModal } from './components/SavedProjectsModal';
@@ -40,6 +41,8 @@ const App: React.FC = () => {
   const [nameArtStatus, setNameArtStatus] = useState<string | null>(null);
   const [isGeneratingNameArt, setIsGeneratingNameArt] = useState(false);
   const [nameArtGender, setNameArtGender] = useState<'FEMALE' | 'MALE' | 'UNISEX'>('UNISEX');
+  const [showExternalPrompt, setShowExternalPrompt] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   const [customOutroImages, setCustomOutroImages] = useState<string[]>([]);
   const [showIdeas, setShowIdeas] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>("ALL");
@@ -241,6 +244,30 @@ const App: React.FC = () => {
     } finally {
       setIsGeneratingNameArt(false);
     }
+  };
+
+  // The same ten concepts, written out as a brief the user pastes into ChatGPT, Midjourney or
+  // any other text-to-image tool. Their renders come back through the normal upload path, so a
+  // busy image quota here never blocks anyone from finishing a video.
+  const externalPrompt = buildExternalImagePrompt(topic.trim(), nameArtGender);
+
+  const handleCopyExternalPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(externalPrompt);
+    } catch {
+      // navigator.clipboard is undefined outside a secure context — the LAN address the dev
+      // server prints (http://192.168.x.x:3001) is exactly that case.
+      const ta = document.createElement('textarea');
+      ta.value = externalPrompt;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setPromptCopied(true);
+    setTimeout(() => setPromptCopied(false), 2000);
   };
 
   const handleUserImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -753,6 +780,44 @@ const App: React.FC = () => {
                     <p className="text-[9px] text-slate-500 leading-tight">
                       10 xil uslub: Royal, Tabiat, Kosmos, Shahar, Minimal, Gul, Olov, Rang, Kristall, Ramziy. Har biri alohida yaratiladi — 1-2 daqiqa vaqt oladi.
                     </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800/80 space-y-2">
+                    <label className="text-[10px] font-bold text-sky-400 uppercase tracking-wider block">🤖 Boshqa AI'da yaratish</label>
+                    <p className="text-[9px] text-slate-500 leading-tight">
+                      Kvota band bo'lsa yoki yanada kuchliroq dizayn kerak bo'lsa — shu promptni ChatGPT, Gemini, Midjourney yoki boshqa rasm yaratuvchi AI'ga joylang. U 10 ta 9:16 rasmni bittalab chizib beradi, siz esa ularni yuqoridagi “Yuklash” orqali qo'shib, videoni shu yerda yaratasiz.
+                    </p>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowExternalPrompt(v => !v)}
+                      className="w-full p-2.5 rounded-xl text-[11px] font-bold transition bg-slate-950 border border-sky-500/40 text-sky-300 hover:border-sky-400 hover:text-sky-200"
+                    >
+                      {showExternalPrompt ? '▲ Promptni yashirish' : `▼ ${topic.trim() || 'Ism'} uchun tayyor promptni ko'rish`}
+                    </button>
+
+                    {showExternalPrompt && (
+                      <div className="space-y-2">
+                        {!topic.trim() && (
+                          <p className="text-[9px] text-amber-300/90 leading-tight">
+                            Ism maydoni bo'sh — promptda “ISM” turibdi. Yuqorida ismni yozsangiz, prompt avtomatik yangilanadi.
+                          </p>
+                        )}
+                        <pre className="max-h-72 overflow-auto rounded-xl bg-slate-950 border border-slate-800 p-2.5 text-[9px] leading-snug text-slate-300 whitespace-pre-wrap break-words select-all">
+{externalPrompt}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={handleCopyExternalPrompt}
+                          className="w-full p-3 rounded-xl text-xs font-bold transition bg-gradient-to-r from-sky-500 to-indigo-600 text-white"
+                        >
+                          {promptCopied ? '✅ Nusxalandi!' : '📋 Promptni nusxalash'}
+                        </button>
+                        <p className="text-[9px] text-slate-500 leading-tight">
+                          Jinsni yuqoridagi tugmalardan tanlang — prompt shunga moslashadi. Uslublar ro'yxati ataylab berilmagan: AI har bir ism uchun 10 ta yangi g'oya o'ylab topadi, shuning uchun har safar boshqacha chiqadi. Midjourney'da har bir konsepsiya oxiriga <span className="text-slate-300">--ar 9:16</span> qo'shing.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
