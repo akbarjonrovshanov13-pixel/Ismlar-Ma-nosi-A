@@ -249,8 +249,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (t < 2.5) masterEnv = t / 2.5;
       if (t > safeDuration - 2.5) masterEnv = Math.max(0, (safeDuration - t) / 2.5);
 
-      left[i] = Math.max(-1, Math.min(1, sampleL * 0.16 * masterEnv));
-      right[i] = Math.max(-1, Math.min(1, sampleR * 0.16 * masterEnv));
+      left[i] = Math.max(-1, Math.min(1, sampleL * 0.40 * masterEnv));
+      right[i] = Math.max(-1, Math.min(1, sampleR * 0.40 * masterEnv));
     }
 
     return buffer;
@@ -1119,6 +1119,52 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   }, [processedLayers, duration, preparedSubtitles, drawLayer, outroDuration]);
 
+  const startAudioSources = (offset: number) => {
+    if (!audioContext || !audioBuffer) return;
+
+    if (speechSourceRef.current) {
+      try { speechSourceRef.current.stop(); } catch {}
+      speechSourceRef.current = null;
+    }
+    if (bgmSourceRef.current) {
+      try { bgmSourceRef.current.stop(); } catch {}
+      bgmSourceRef.current = null;
+    }
+
+    // 1. Speech Audio
+    const speechSource = audioContext.createBufferSource();
+    speechSource.buffer = audioBuffer;
+    speechSource.connect(audioContext.destination);
+    speechSource.start(0, offset);
+    speechSourceRef.current = speechSource;
+
+    // 2. Background Music (if enabled)
+    if (isBgmEnabled && bgmBuffer) {
+      const bgmSource = audioContext.createBufferSource();
+      bgmSource.buffer = bgmBuffer;
+      const bgmGain = audioContext.createGain();
+      bgmGain.gain.value = bgmVolume;
+      bgmSource.connect(bgmGain);
+      bgmGain.connect(audioContext.destination);
+      bgmSource.start(0, offset);
+      bgmSourceRef.current = bgmSource;
+      bgmGainRef.current = bgmGain;
+    }
+
+    setStartTime(audioContext.currentTime - offset);
+  };
+
+  const stopAudioSources = () => {
+    if (speechSourceRef.current) {
+      try { speechSourceRef.current.stop(); } catch {}
+      speechSourceRef.current = null;
+    }
+    if (bgmSourceRef.current) {
+      try { bgmSourceRef.current.stop(); } catch {}
+      bgmSourceRef.current = null;
+    }
+  };
+
   // 5. Animation Loop (Playback)
   const animate = useCallback(() => {
     if (!isPlaying || !audioContext) return;
@@ -1129,6 +1175,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (time >= duration + 0.2) { 
       setIsPlaying(false);
       currentTimeRef.current = 0;
+      stopAudioSources();
       draw(0);
       return;
     }
@@ -1153,34 +1200,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (!audioContext || !audioBuffer) return;
 
     if (isPlaying) {
-      await audioContext.suspend();
+      stopAudioSources();
+      if (audioContext.state === 'running') {
+        await audioContext.suspend();
+      }
       setIsPlaying(false);
     } else {
       if (audioContext.state === 'suspended') {
         await audioContext.resume();
-      } else {
-          // 1. Speech Audio
-          const speechSource = audioContext.createBufferSource();
-          speechSource.buffer = audioBuffer;
-          speechSource.connect(audioContext.destination);
-          speechSource.start(0, currentTimeRef.current);
-          speechSourceRef.current = speechSource;
-
-          // 2. Background Music (if enabled)
-          if (isBgmEnabled && bgmBuffer) {
-            const bgmSource = audioContext.createBufferSource();
-            bgmSource.buffer = bgmBuffer;
-            const bgmGain = audioContext.createGain();
-            bgmGain.gain.value = bgmVolume;
-            bgmSource.connect(bgmGain);
-            bgmGain.connect(audioContext.destination);
-            bgmSource.start(0, currentTimeRef.current);
-            bgmSourceRef.current = bgmSource;
-            bgmGainRef.current = bgmGain;
-          }
-
-          setStartTime(audioContext.currentTime - currentTimeRef.current);
       }
+      startAudioSources(currentTimeRef.current);
       setIsPlaying(true);
     }
   };
