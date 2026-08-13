@@ -48,6 +48,41 @@ export function getVertexAI(locationOverride) {
 }
 
 /**
+ * Pollinations AI image generator fallback.
+ * 100% free, open access text-to-image API without requiring any API keys or credentials.
+ * Returns base64 data URI (data:image/jpeg;base64,...).
+ */
+export async function fetchPollinationsImage(prompt, width = 768, height = 1344) {
+  try {
+    const seed = Math.floor(Math.random() * 10000000);
+    const cleanPrompt = encodeURIComponent(String(prompt).slice(0, 400));
+    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 14000); // 14s timeout
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`Pollinations AI returned HTTP status ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    if (!buffer || buffer.byteLength < 500) {
+      throw new Error("Pollinations AI returned empty or invalid image buffer");
+    }
+
+    const base64 = Buffer.from(buffer).toString("base64");
+    const mimeType = response.headers.get("content-type") || "image/jpeg";
+    return `data:${mimeType};base64,${base64}`;
+  } catch (err) {
+    console.warn("Pollinations AI fallback failed:", err.message);
+    return null;
+  }
+}
+
+/**
  * Executes a request with automatic multi-model and multi-region quota fallback.
  * If a model (e.g. gemini-2.5-flash-image) or region hits 429 (RESOURCE_EXHAUSTED) or is unavailable,
  * this automatically cascades through fallback models (imagen-3.0-generate-002, imagen-3.0-fast-generate-001, gemini-3.1-flash-lite-image)
@@ -57,9 +92,9 @@ export async function executeWithQuotaFallback(
   apiRunner,
   models = [
     "gemini-2.5-flash-image",
+    "gemini-3.1-flash-lite-image",
     "imagen-3.0-generate-002",
-    "imagen-3.0-fast-generate-001",
-    "gemini-3.1-flash-lite-image"
+    "imagen-3.0-fast-generate-001"
   ]
 ) {
   const defaultLoc = process.env.GCP_LOCATION || "global";

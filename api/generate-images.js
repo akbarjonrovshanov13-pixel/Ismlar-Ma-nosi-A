@@ -1,6 +1,6 @@
-import { getVertexAI, executeWithQuotaFallback, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
+import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
 
-// Same-origin fallback (used only if Vertex AI generation fails for a slot) —
+// Same-origin fallback (used only if both Vertex AI and Pollinations AI fail) —
 // branded Luxe Core product shots instead of generic stock wallpaper.
 const HD_WALLPAPERS = [
   "/fallback/cup.jpg",
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
     try {
       getVertexAI();
     } catch (err) {
-      console.warn("Vertex AI unavailable, using wallpaper fallback:", err.message);
+      console.warn("Vertex AI unavailable, will rely on Pollinations AI fallback:", err.message);
       aiAvailable = false;
     }
 
@@ -105,17 +105,32 @@ export default async function handler(req, res) {
           } catch (err) {
             const last = attempt === RETRY_BACKOFF_MS.length;
             if (isQuotaError(err)) {
-              console.warn(`Gemini image quota exhausted across regions and models for prompt ${index}, using wallpaper fallback:`, err.message);
+              console.warn(`Gemini image quota exhausted across regions for prompt ${index}, using Pollinations AI fallback:`, err.message);
               isBatchQuotaExhausted = true;
               break;
             }
             if (last) {
-              console.warn(`Gemini image generation failed for prompt ${index}, using wallpaper fallback:`, err.message);
+              console.warn(`Gemini image generation failed for prompt ${index}, using Pollinations AI fallback:`, err.message);
               break;
             }
             console.warn(`Gemini image generation failed for prompt ${index}, retrying...`, err.message);
             await sleep(RETRY_BACKOFF_MS[attempt]);
           }
+        }
+      }
+
+      // If Vertex AI did not produce an image, try Pollinations AI before static wallpapers
+      if (!generated) {
+        console.log(`Generating prompt ${index} using Pollinations AI fallback...`);
+        const enhanced = index === heroIndex
+          ? nameHeroPrompt(topic)
+          : p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
+
+        const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
+        if (pollinationsImg) {
+          generated = pollinationsImg;
+          const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `style:${index}:${enhanced}`;
+          setCachedImage(cacheKey, pollinationsImg);
         }
       }
 

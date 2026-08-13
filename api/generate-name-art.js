@@ -1,4 +1,4 @@
-import { getVertexAI, executeWithQuotaFallback, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
+import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
 import { NAME_ART_CONCEPTS as CONCEPTS, buildNameArtPrompt } from "../nameArtConcepts.js";
 
 export const config = { maxDuration: 60 };
@@ -29,36 +29,53 @@ export default async function handler(req, res) {
     try {
       getVertexAI();
     } catch (err) {
-      console.warn("Vertex AI unavailable for name art:", err.message);
-      return res.status(503).json({ error: "AI xizmati sozlanmagan", conceptId: concept.id });
+      console.warn("Vertex AI unavailable for name art, attempting Pollinations AI fallback:", err.message);
+      aiAvailable = false;
     }
 
-    const response = await executeWithQuotaFallback(
-      async (ai, loc, modelToUse) => {
-        return await ai.models.generateContent({
-          model: modelToUse,
-          contents: [{ role: "user", parts: [{ text: buildNameArtPrompt(name, gender, concept) }] }],
-          config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
-        });
-      },
-      [
-        "gemini-2.5-flash-image",
-        "gemini-3.1-flash-lite-image",
-        "imagen-3.0-generate-002",
-        "imagen-3.0-fast-generate-001"
-      ]
-    );
+    let imageResult = null;
 
-    const part = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
-    if (!part?.inlineData?.data) {
+    if (aiAvailable) {
+      try {
+        const response = await executeWithQuotaFallback(
+          async (ai, loc, modelToUse) => {
+            return await ai.models.generateContent({
+              model: modelToUse,
+              contents: [{ role: "user", parts: [{ text: buildNameArtPrompt(name, gender, concept) }] }],
+              config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
+            });
+          },
+          [
+            "gemini-2.5-flash-image",
+            "gemini-3.1-flash-lite-image",
+            "imagen-3.0-generate-002",
+            "imagen-3.0-fast-generate-001"
+          ]
+        );
+
+        const part = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+        if (part?.inlineData?.data) {
+          imageResult = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      } catch (err) {
+        console.warn(`Vertex AI failed for name art concept ${concept.id}, attempting Pollinations AI fallback:`, err.message);
+      }
+    }
+
+    // Fallback to Pollinations AI if Vertex AI fails or is quota-exhausted
+    if (!imageResult) {
+      const prompt = buildNameArtPrompt(name, gender, concept);
+      imageResult = await fetchPollinationsImage(prompt, 768, 1344);
+    }
+
+    if (!imageResult) {
       return res.status(502).json({ error: "Rasm yaratilmadi", conceptId: concept.id, label: concept.label });
     }
 
-    const imgData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-    setCachedImage(cacheKey, imgData);
+    setCachedImage(cacheKey, imageResult);
 
     return res.status(200).json({
-      image: imgData,
+      image: imageResult,
       conceptId: concept.id,
       label: concept.label,
       index,
