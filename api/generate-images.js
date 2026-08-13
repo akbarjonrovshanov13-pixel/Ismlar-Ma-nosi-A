@@ -1,4 +1,4 @@
-import { getVertexAI, setCors } from "./_helpers.js";
+import { getVertexAI, executeWithQuotaFallback, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
 
 // Same-origin fallback (used only if Vertex AI generation fails for a slot) —
 // branded Luxe Core product shots instead of generic stock wallpaper.
@@ -9,15 +9,8 @@ const HD_WALLPAPERS = [
   "/fallback/drink.jpg",
 ];
 
-// Backgrounds stay free of writing — asked for text they produce garbled glyphs, and for
-// Uzbek names they add Arabic calligraphy unprompted. Keep this short: a long negation list
-// ("no text, no letters, no words, no numbers, …") makes the model return an empty response
-// with no image part at all.
 const NO_TEXT_RULE = ", without any writing or lettering";
 
-// The opening frame does carry the name. Spelling it out letter by letter is what makes the
-// model get it right — asked plainly for "MALIKA" it returns "MAUKA", but with the dashed
-// spelling and an explicit letter count it renders the word correctly.
 const nameHeroPrompt = (name) => {
   const clean = String(name).trim().toUpperCase().slice(0, 20);
   const letters = clean.split("").join("-");
@@ -31,7 +24,6 @@ const STYLE_SUFFIXES = [
   ", cinematic warm sunset golden hour, soft pastel tones, dreamlike atmosphere, highly artistic and elegant background, 8k" + NO_TEXT_RULE,
 ];
 
-// Four image calls run in parallel at ~7s each; this leaves headroom over the default limit.
 export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
@@ -42,15 +34,14 @@ export default async function handler(req, res) {
     const { prompts, topic } = req.body || {};
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
 
-    // Opening frame is the name itself; the rest stay as clean atmospheric backgrounds so the
-    // model only has to spell the name once per video.
     const heroIndex = topic && String(topic).trim() ? 0 : -1;
 
-    let ai = null;
+    let aiAvailable = true;
     try {
-      ai = getVertexAI();
+      getVertexAI();
     } catch (err) {
       console.warn("Vertex AI unavailable, using wallpaper fallback:", err.message);
+      aiAvailable = false;
     }
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -59,51 +50,77 @@ export default async function handler(req, res) {
       const enhanced = index === heroIndex
         ? nameHeroPrompt(topic)
         : p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents: [{ role: "user", parts: [{ text: enhanced }] }],
-        // Ask the API for 9:16 rather than describing it in the prompt — prompt text alone
-        // yields a 1024x1024 square, which the player then crops to fit, cutting away ~44%
-        // of the composition. This returns a true 768x1344 vertical frame.
-        config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
-      });
+
+      // Check cache first to avoid redundant API calls
+      const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `style:${index}:${enhanced}`;
+      const cached = getCachedImage(cacheKey);
+      if (cached) {
+        console.log(`Using cached image for prompt index ${index}`);
+        return cached;
+      }
+
+      // Execute with multi-model and multi-region quota fallback
+      const response = await executeWithQuotaFallback(
+        async (ai, loc, modelToUse) => {
+          return await ai.models.generateContent({
+            model: modelToUse,
+            contents: [{ role: "user", parts: [{ text: enhanced }] }],
+            config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
+          });
+        },
+        [
+          "gemini-2.5-flash-image",
+          "gemini-3.1-flash-lite-image",
+          "imagen-3.0-generate-002",
+          "imagen-3.0-fast-generate-001"
+        ]
+      );
+
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
       if (!part?.inlineData?.data) throw new Error("Rasm ma'lumoti topilmadi");
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      
+      const imgData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      setCachedImage(cacheKey, imgData);
+      return imgData;
     };
 
-    const isQuotaError = (err) => /429|RESOURCE_EXHAUSTED/i.test(err?.message || "");
+    const isQuotaError = (err) => /429|RESOURCE_EXHAUSTED|Quota exceeded/i.test(err?.message || "");
+    const RETRY_BACKOFF_MS = [1000, 2000];
+    let isBatchQuotaExhausted = false;
 
-    // Deliberately does NOT wait out a quota rejection. Measured against the live project: once
-    // the per-minute image quota trips it stays shut for ~55s regardless of how far it was
-    // exceeded, and waiting 38s inside the request still came back throttled while pushing the
-    // handler to 48s. So a quota hit falls back immediately rather than stalling the video for
-    // a result that isn't coming. Raising the quota in Cloud Console is the actual fix.
-    // The short retry is for transient, non-quota blips only.
-    const RETRY_BACKOFF_MS = [1500];
+    const images = [];
+    for (let index = 0; index < validPrompts.length; index++) {
+      const p = validPrompts[index];
+      let generated = null;
 
-    const images = await Promise.all(validPrompts.map(async (p, index) => {
-      if (ai) {
-        // Stagger launches — the model rejects bursts of simultaneous requests
-        // (RESOURCE_EXHAUSTED) even when a single request succeeds instantly.
-        await sleep(index * 150);
+      if (aiAvailable && !isBatchQuotaExhausted) {
+        if (index > 0) {
+          await sleep(500);
+        }
 
         for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
           try {
-            return await generateOne(p, index);
+            generated = await generateOne(p, index);
+            break;
           } catch (err) {
             const last = attempt === RETRY_BACKOFF_MS.length;
-            if (last || isQuotaError(err)) {
+            if (isQuotaError(err)) {
+              console.warn(`Gemini image quota exhausted across regions and models for prompt ${index}, using wallpaper fallback:`, err.message);
+              isBatchQuotaExhausted = true;
+              break;
+            }
+            if (last) {
               console.warn(`Gemini image generation failed for prompt ${index}, using wallpaper fallback:`, err.message);
               break;
             }
-            console.warn(`Gemini image generation failed for prompt ${index}, retrying:`, err.message);
+            console.warn(`Gemini image generation failed for prompt ${index}, retrying...`, err.message);
             await sleep(RETRY_BACKOFF_MS[attempt]);
           }
         }
       }
-      return HD_WALLPAPERS[index % HD_WALLPAPERS.length];
-    }));
+
+      images.push(generated || HD_WALLPAPERS[index % HD_WALLPAPERS.length]);
+    }
 
     return res.status(200).json({ images });
   } catch (err) {

@@ -1,5 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 
+// In-memory cache for generated images to reduce API calls and save quota
+const imageCache = new Map();
+const MAX_CACHE_SIZE = 100;
+
+export function getCachedImage(key) {
+  return imageCache.get(key) || null;
+}
+
+export function setCachedImage(key, data) {
+  if (imageCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = imageCache.keys().next().value;
+    imageCache.delete(firstKey);
+  }
+  imageCache.set(key, data);
+}
+
 // Vertex AI client — 100% GCP Vertex AI Service Account ($273+ credits)
 // Service Account: vertex-sa@gen-lang-client-0604912271
 export function getVertexAI(locationOverride) {
@@ -23,7 +39,73 @@ export function getVertexAI(locationOverride) {
     });
   }
 
+  // Fallback to direct Gemini API key if GCP private key is missing
+  if (process.env.GEMINI_API_KEY) {
+    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  }
+
   throw new Error("GCP Service Account kaliti sozlanmagan");
+}
+
+/**
+ * Executes a request with automatic multi-model and multi-region quota fallback.
+ * If a model (e.g. gemini-2.5-flash-image) or region hits 429 (RESOURCE_EXHAUSTED) or is unavailable,
+ * this automatically cascades through fallback models (imagen-3.0-generate-002, imagen-3.0-fast-generate-001, gemini-3.1-flash-lite-image)
+ * and across GCP regions.
+ */
+export async function executeWithQuotaFallback(
+  apiRunner,
+  models = [
+    "gemini-2.5-flash-image",
+    "imagen-3.0-generate-002",
+    "imagen-3.0-fast-generate-001",
+    "gemini-3.1-flash-lite-image"
+  ]
+) {
+  const defaultLoc = process.env.GCP_LOCATION || "global";
+  const locations = [
+    defaultLoc,
+    "us-central1",
+    "us-east4",
+    "europe-west1",
+    "asia-east1",
+    "us-west1",
+  ];
+  const uniqueLocations = [...new Set(locations)];
+  let lastError = null;
+
+  for (const model of models) {
+    for (const loc of uniqueLocations) {
+      try {
+        const ai = getVertexAI(loc);
+        return await apiRunner(ai, loc, model);
+      } catch (err) {
+        lastError = err;
+        const msg = err?.message || "";
+        const isQuota = /429|RESOURCE_EXHAUSTED|Quota exceeded/i.test(msg);
+        const isNotFoundOrUnsupported = /NOT_FOUND|404|not found|not supported|invalid/i.test(msg);
+        if (isQuota || isNotFoundOrUnsupported) {
+          console.warn(`Model "${model}" at location "${loc}" failed (${msg}), attempting next fallback...`);
+          continue;
+        }
+        throw err; // Re-throw fatal non-quota errors immediately
+      }
+    }
+  }
+
+  // Direct GEMINI_API_KEY fallback as last resort across models
+  if (process.env.GEMINI_API_KEY) {
+    for (const model of models) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        return await apiRunner(ai, "direct-api", model);
+      } catch (err) {
+        console.warn(`Direct GEMINI_API_KEY fallback with model "${model}" failed:`, err.message);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 // Robust JSON parser with repair logic
