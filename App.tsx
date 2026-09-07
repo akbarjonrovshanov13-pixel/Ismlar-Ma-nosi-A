@@ -9,6 +9,7 @@ import { SavedProjectsModal } from './components/SavedProjectsModal';
 import { PricingModal } from './components/PricingModal';
 import { AdminModal } from './components/AdminModal';
 import { AdSettingsModal } from './components/AdSettingsModal';
+import { AuthModal } from './components/AuthModal';
 import { 
   auth, 
   signInWithGoogle, 
@@ -70,6 +71,7 @@ const App: React.FC = () => {
   const [isPricingOpen, setIsPricingOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdSettingsOpen, setIsAdSettingsOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [adConfig, setAdConfig] = useState<AdConfig>({
     watermarkText: "✨ @luxe_core_uz",
     watermarkPosition: WatermarkPosition.TOP_RIGHT,
@@ -91,8 +93,8 @@ const App: React.FC = () => {
     videoData: null,
   });
 
-  const fetchUserProfile = async (targetUser: User | null = user) => {
-    if (targetUser) {
+  const fetchUserProfile = async (targetUser: any = user) => {
+    if (targetUser && targetUser.uid) {
       // 1. Try PostgreSQL first
       let p = await getUserProfileFromPostgres(targetUser.uid);
       if (!p) {
@@ -115,12 +117,44 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
+    // 1. Check local session
+    const saved = localStorage.getItem('ismlar_auth_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setUser(parsed);
+        fetchUserProfile(parsed);
+      } catch (e) {}
+    }
+
+    // 2. Listen to Firebase auth
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      fetchUserProfile(currentUser);
+      if (currentUser) {
+        setUser(currentUser);
+        localStorage.setItem('ismlar_auth_user', JSON.stringify({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          displayName: currentUser.displayName,
+          photoURL: currentUser.photoURL
+        }));
+        fetchUserProfile(currentUser);
+      }
     });
     return () => unsubscribe();
   }, []);
+
+  const handleLoginSuccess = (loggedInUser: any) => {
+    setUser(loggedInUser);
+    localStorage.setItem('ismlar_auth_user', JSON.stringify(loggedInUser));
+    fetchUserProfile(loggedInUser);
+  };
+
+  const handleLogOut = async () => {
+    localStorage.removeItem('ismlar_auth_user');
+    setUser(null);
+    setUserProfile(null);
+    await logOut().catch(() => {});
+  };
 
   const handleFetchSavedVideos = async () => {
     if (!user) return;
@@ -382,16 +416,9 @@ const App: React.FC = () => {
   const checkCreditsAndAuthorize = async (): Promise<boolean> => {
     let currentUser = user;
     if (!currentUser) {
-      try {
-        currentUser = await signInWithGoogle();
-        if (!currentUser) return false;
-        setUser(currentUser);
-      } catch (err) {
-        return false;
-      }
+      setIsAuthModalOpen(true);
+      return false;
     }
-
-    if (!currentUser) return false;
 
     // Primary admin email always has full access
     const isPrimaryAdmin = currentUser.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
@@ -650,7 +677,7 @@ const App: React.FC = () => {
                      </div>
                    )}
                    <button
-                     onClick={logOut}
+                     onClick={handleLogOut}
                      className="text-slate-400 hover:text-red-400 p-0.5 text-xs transition"
                      title="Chiqish"
                    >
@@ -660,7 +687,7 @@ const App: React.FC = () => {
                </div>
                  ) : (
                 <button
-                  onClick={() => signInWithGoogle()}
+                  onClick={() => setIsAuthModalOpen(true)}
                   className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white shadow-lg shadow-brand-500/20 border border-brand-500/30 transition flex items-center gap-1"
                 >
                   <span className="text-xs">🚀</span>
@@ -1301,6 +1328,13 @@ const App: React.FC = () => {
         onClose={() => setIsAdSettingsOpen(false)}
         adConfig={adConfig}
         onUpdateAdConfig={(newConfig) => setAdConfig(prev => ({ ...prev, ...newConfig }))}
+      />
+
+      {/* Auth / Kirish Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={handleLoginSuccess}
       />
 
       {/* Cloud Toast Notification */}
