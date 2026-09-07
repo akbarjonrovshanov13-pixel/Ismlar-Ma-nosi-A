@@ -685,7 +685,7 @@ const App: React.FC = () => {
 
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">🔤 Subtitr Stili (Custom Captions)</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <button
                   type="button"
                   onClick={() => setCaptionStyle(CaptionStyle.TIKTOK_YELLOW)}
@@ -723,6 +723,32 @@ const App: React.FC = () => {
                 >
                   <span className="text-xs font-bold block">💜 Neon Glow</span>
                   <span className="text-[9px] opacity-75 mt-1">Yorqin nur aks</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCaptionStyle(CaptionStyle.HORMOZI_GREEN)}
+                  className={`p-2.5 rounded-xl text-left border transition flex flex-col justify-between ${
+                    captionStyle === CaptionStyle.HORMOZI_GREEN
+                      ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 shadow-md shadow-emerald-500/10'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-bold block">🟩 Hormozi</span>
+                  <span className="text-[9px] opacity-75 mt-1">Yashil & Kontrast</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCaptionStyle(CaptionStyle.ROYAL_GOLD)}
+                  className={`p-2.5 rounded-xl text-left border transition flex flex-col justify-between ${
+                    captionStyle === CaptionStyle.ROYAL_GOLD
+                      ? 'bg-yellow-500/20 border-yellow-400 text-yellow-300 shadow-md shadow-yellow-500/10'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-bold block">👑 Royal Oltin</span>
+                  <span className="text-[9px] opacity-75 mt-1">Hashamatli Oltin</span>
                 </button>
               </div>
             </div>

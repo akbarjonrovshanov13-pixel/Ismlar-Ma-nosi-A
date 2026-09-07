@@ -18,7 +18,9 @@ export enum HookStyle {
 export enum CaptionStyle {
   TIKTOK_YELLOW = 'TIKTOK_YELLOW',
   INSTAGRAM_WHITE = 'INSTAGRAM_WHITE',
-  NEON_GLOW = 'NEON_GLOW'
+  NEON_GLOW = 'NEON_GLOW',
+  HORMOZI_GREEN = 'HORMOZI_GREEN',
+  ROYAL_GOLD = 'ROYAL_GOLD'
 }
 
 export enum WatermarkPosition {

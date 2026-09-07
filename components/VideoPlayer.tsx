@@ -686,10 +686,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const { canvas, motion } = layer;
     const { startX, startY, startScale, endX, endY, endScale } = motion;
 
-    // Linear Interpolation
-    const currentX = startX + (endX - startX) * progress;
-    const currentY = startY + (endY - startY) * progress;
-    const currentScale = startScale + (endScale - startScale) * progress;
+    // Sinusoidal ease-in-out curve for cinematic, organic camera motion
+    const p = Math.max(0, Math.min(1, progress));
+    const ease = (1 - Math.cos(p * Math.PI)) / 2;
+    // Micro parallax drift on secondary axis
+    const subtleParallax = Math.sin(p * Math.PI) * 4;
+
+    const currentX = startX + (endX - startX) * ease + subtleParallax;
+    const currentY = startY + (endY - startY) * ease - subtleParallax * 0.5;
+    const currentScale = startScale + (endScale - startScale) * ease;
 
     ctx.save();
     ctx.globalAlpha = opacity;
@@ -949,7 +954,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
        
        ctx.save();
        if (transType === 0) {
-           // Crossfade
+           // Crossfade with smooth zoom-through
+           ctx.translate(WIDTH / 2, HEIGHT / 2);
+           const zoom = 1.0 + 0.05 * (1 - fadeProgress);
+           ctx.scale(zoom, zoom);
+           ctx.translate(-WIDTH / 2, -HEIGHT / 2);
            drawLayer(ctx, processedLayers[nextIndex], 0, fadeProgress);
        } else if (transType === 1) {
            // Slide Left
@@ -960,19 +969,37 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
            ctx.translate(0, HEIGHT * (1 - fadeProgress));
            drawLayer(ctx, processedLayers[nextIndex], 0, 1);
        } else if (transType === 3) {
-           // Zoom Fade
+           // Zoom-Through Dissolve
            ctx.translate(WIDTH / 2, HEIGHT / 2);
-           const scale = 0.8 + 0.2 * fadeProgress;
+           const scale = 0.85 + 0.15 * fadeProgress;
            ctx.scale(scale, scale);
            ctx.translate(-WIDTH / 2, -HEIGHT / 2);
            drawLayer(ctx, processedLayers[nextIndex], 0, fadeProgress);
        } else if (transType === 4) {
-           // Flash
+           // Warm Lens Flare Burst & Crossfade
            drawLayer(ctx, processedLayers[nextIndex], 0, fadeProgress);
-           ctx.fillStyle = `rgba(255, 255, 255, ${Math.sin(fadeProgress * Math.PI)})`;
+           const flareGrad = ctx.createRadialGradient(WIDTH / 2, HEIGHT / 2, 40, WIDTH / 2, HEIGHT / 2, HEIGHT * 0.6);
+           flareGrad.addColorStop(0, `rgba(255, 245, 225, ${Math.sin(fadeProgress * Math.PI) * 0.85})`);
+           flareGrad.addColorStop(0.4, `rgba(251, 191, 36, ${Math.sin(fadeProgress * Math.PI) * 0.45})`);
+           flareGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+           ctx.fillStyle = flareGrad;
            ctx.fillRect(0, 0, WIDTH, HEIGHT);
        }
        ctx.restore();
+
+       // Anamorphic Golden Light Leak streak across transition
+       const leakIntensity = Math.sin(fadeProgress * Math.PI);
+       if (leakIntensity > 0.02) {
+         ctx.save();
+         const leakGrad = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT);
+         leakGrad.addColorStop(0, `rgba(251, 191, 36, ${leakIntensity * 0.45})`);
+         leakGrad.addColorStop(0.3, `rgba(245, 158, 11, ${leakIntensity * 0.3})`);
+         leakGrad.addColorStop(0.7, `rgba(254, 240, 138, ${leakIntensity * 0.2})`);
+         leakGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+         ctx.fillStyle = leakGrad;
+         ctx.fillRect(0, 0, WIDTH, HEIGHT);
+         ctx.restore();
+       }
     }
 
     // Add Vignette for cinematic look
@@ -1085,7 +1112,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
              const badgeFill: Record<string, { fill: string; glow: string }> = {
                 [CaptionStyle.INSTAGRAM_WHITE]: { fill: '#ffffff', glow: 'rgba(255, 255, 255, 0.8)' },
                 [CaptionStyle.NEON_GLOW]: { fill: '#06b6d4', glow: 'rgba(6, 182, 212, 0.9)' },
-                [CaptionStyle.TIKTOK_YELLOW]: { fill: '#facc15', glow: 'rgba(250, 204, 21, 0.75)' }
+                [CaptionStyle.TIKTOK_YELLOW]: { fill: '#facc15', glow: 'rgba(250, 204, 21, 0.75)' },
+                [CaptionStyle.HORMOZI_GREEN]: { fill: '#22c55e', glow: 'rgba(34, 197, 94, 0.95)' },
+                [CaptionStyle.ROYAL_GOLD]: { fill: '#fbbf24', glow: 'rgba(251, 191, 36, 0.95)' }
              };
 
              line.words.forEach((wt, idx) => {
@@ -1134,7 +1163,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 // Badges were already painted in the pass above, so this only draws glyphs.
                 ctx.font = `900 ${fontSize}px "Inter", sans-serif`;
 
-                if (captionStyle === CaptionStyle.INSTAGRAM_WHITE) {
+                if (captionStyle === CaptionStyle.HORMOZI_GREEN) {
+                  // Alex Hormozi Signature Style (Ultra-Vibrant Green Badge + Punchy Contrast)
+                  if (isWordActive) {
+                    ctx.shadowColor = 'transparent';
+                    ctx.fillStyle = '#000000'; // High contrast black on green badge
+                    ctx.fillText(wt.word, currentX, yPos + yOffset);
+                  } else {
+                    ctx.lineWidth = 14;
+                    ctx.strokeStyle = '#000000';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeText(wt.word, currentX, yPos + yOffset);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillText(wt.word, currentX, yPos + yOffset);
+                  }
+                } else if (captionStyle === CaptionStyle.ROYAL_GOLD) {
+                  // Royal Gold Luxury Style (Glowing Amber & Gold)
+                  if (isWordActive) {
+                    ctx.shadowColor = 'transparent';
+                    ctx.fillStyle = '#1c1305'; // Deep obsidian on gold badge
+                    ctx.fillText(wt.word, currentX, yPos + yOffset);
+                  } else {
+                    ctx.shadowColor = '#d97706';
+                    ctx.shadowBlur = 14;
+                    ctx.lineWidth = 10;
+                    ctx.strokeStyle = '#78350f';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeText(wt.word, currentX, yPos + yOffset);
+
+                    ctx.fillStyle = '#fef3c7'; // Rich warm cream
+                    ctx.fillText(wt.word, currentX, yPos + yOffset);
+                  }
+                } else if (captionStyle === CaptionStyle.INSTAGRAM_WHITE) {
                   if (isWordActive) {
                     ctx.shadowColor = 'transparent';
                     ctx.fillStyle = '#000000';
@@ -1347,9 +1408,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     currentTimeRef.current = time;
+
+    // Smart Audio Ducking: subtly lower BGM while narration speech is active
+    if (bgmGainRef.current && isBgmEnabled) {
+      const isSpeaking = preparedSubtitles.some(s => time >= s.start && time < s.end);
+      const targetGain = isSpeaking ? bgmVolume * 0.45 : bgmVolume;
+      try {
+        bgmGainRef.current.gain.setTargetAtTime(targetGain, now, 0.08);
+      } catch {}
+    }
+
     draw(time);
     reqRef.current = requestAnimationFrame(animate);
-  }, [isPlaying, audioContext, startTime, duration, draw]);
+  }, [isPlaying, audioContext, startTime, duration, draw, preparedSubtitles, isBgmEnabled, bgmVolume]);
 
   useEffect(() => {
     reqRef.current = requestAnimationFrame(animate);
@@ -1414,14 +1485,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       speechSource.connect(dest);
       speechSource.start(0);
 
-      // 2. Background Music Mixing (if enabled)
+      // 2. Background Music Mixing (if enabled) with Smart Ducking
       const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
       if (isBgmEnabled && activeBgm) {
         const bgmSource = recCtx.createBufferSource();
         bgmSource.buffer = activeBgm;
         bgmSource.loop = true;
         const bgmGain = recCtx.createGain();
-        bgmGain.gain.value = bgmVolume;
+        bgmGain.gain.setValueAtTime(bgmVolume, 0);
+
+        // Schedule ducking for each subtitle narration segment
+        preparedSubtitles.forEach(sub => {
+          try {
+            bgmGain.gain.setTargetAtTime(bgmVolume * 0.45, sub.start, 0.08);
+            bgmGain.gain.setTargetAtTime(bgmVolume, sub.end, 0.15);
+          } catch {}
+        });
+
         bgmSource.connect(bgmGain);
         bgmGain.connect(dest);
         bgmSource.start(0);

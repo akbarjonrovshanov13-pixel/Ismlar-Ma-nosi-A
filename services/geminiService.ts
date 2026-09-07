@@ -58,13 +58,22 @@ export const generateScript = async (topic: string, useSearch: boolean, hookStyl
   }
 };
 
+const VOICE_MAP: Record<VoiceType, string> = {
+  [VoiceType.FRIENDLY]: "Kore",
+  [VoiceType.SERIOUS]: "Fenrir",
+  [VoiceType.ENERGETIC]: "Puck",
+  [VoiceType.CALM]: "Charon",
+  [VoiceType.PROFESSIONAL]: "Aoede",
+};
+
 export const generateAudio = async (text: string, voiceType: VoiceType): Promise<string> => {
   // Backend serverless endpoint orqali (gemini-3.1-flash-tts-preview)
   try {
+    const voiceName = VOICE_MAP[voiceType] || "Kore";
     const res = await fetch(`${API_BASE}/generate-audio.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voiceName: "Kore" }),
+      body: JSON.stringify({ text, voiceName }),
     });
     if (res.ok) {
       const data = await res.json();
