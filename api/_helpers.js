@@ -84,29 +84,28 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
   }
 }
 
+const MODEL_LOCATIONS = {
+  "gemini-3.1-flash-lite-image": ["global"],
+  "gemini-2.5-flash-image": ["us-central1", "us-east4", "europe-west1", "global"],
+};
+
 /**
  * Executes a request with automatic multi-model and multi-region quota fallback.
- * Prioritizes gemini-2.5-flash-image across active regions (us-central1, us-east4, europe-west1, global).
+ * Prioritizes gemini-3.1-flash-lite-image (fast 5s generation at 'global') as primary,
+ * falling back to gemini-2.5-flash-image across active regions (us-central1, us-east4, europe-west1).
  */
 export async function executeWithQuotaFallback(
   apiRunner,
   models = [
+    "gemini-3.1-flash-lite-image",
     "gemini-2.5-flash-image"
   ]
 ) {
-  const defaultLoc = process.env.GCP_LOCATION || "us-central1";
-  const locations = [
-    defaultLoc,
-    "us-central1",
-    "us-east4",
-    "europe-west1",
-    "global"
-  ];
-  const uniqueLocations = [...new Set(locations)];
   let lastError = null;
 
   for (const model of models) {
-    for (const loc of uniqueLocations) {
+    const validLocations = MODEL_LOCATIONS[model] || ["global", "us-central1", "us-east4", "europe-west1"];
+    for (const loc of validLocations) {
       try {
         const ai = getVertexAI(loc);
         return await apiRunner(ai, loc, model);
