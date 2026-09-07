@@ -69,16 +69,20 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "uid va email shart" });
       }
 
+      const isPrimaryAdmin = email.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
+      const initialCredits = isPrimaryAdmin ? 9999 : 0;
+      const initialApproved = isPrimaryAdmin ? true : false;
+
       const upsertResult = await query(
         `INSERT INTO users (uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 3, 3, false, NOW(), NOW())
+         VALUES ($1, $2, $3, $4, $5, $5, $6, NOW(), NOW())
          ON CONFLICT (uid) DO UPDATE
          SET email = EXCLUDED.email,
              display_name = COALESCE(EXCLUDED.display_name, users.display_name),
              photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
              updated_at = NOW()
          RETURNING id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at`,
-        [uid, email, displayName || "", photoURL || ""]
+        [uid, email, displayName || "", photoURL || "", initialCredits, initialApproved]
       );
 
       const row = upsertResult.rows[0];

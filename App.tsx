@@ -254,6 +254,9 @@ const App: React.FC = () => {
   const handleGenerateNameArt = async () => {
     if (!topic.trim() || isGeneratingNameArt) return;
 
+    const isAuthorized = await checkCreditsAndAuthorize();
+    if (!isAuthorized) return;
+
     setIsGeneratingNameArt(true);
     const slots = MAX_USER_IMAGES - userImages.length;
     let made = 0;
@@ -377,6 +380,48 @@ const App: React.FC = () => {
   };
 
   const checkCreditsAndAuthorize = async (): Promise<boolean> => {
+    let currentUser = user;
+    if (!currentUser) {
+      try {
+        currentUser = await signInWithGoogle();
+        if (!currentUser) return false;
+        setUser(currentUser);
+      } catch (err) {
+        return false;
+      }
+    }
+
+    if (!currentUser) return false;
+
+    // Primary admin email always has full access
+    const isPrimaryAdmin = currentUser.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
+    if (isPrimaryAdmin) return true;
+
+    // Get fresh user profile from PostgreSQL, then Firestore fallback
+    let freshProfile = await getUserProfileFromPostgres(currentUser.uid);
+    if (!freshProfile) {
+      freshProfile = await syncUserWithPostgres({
+        uid: currentUser.uid,
+        email: currentUser.email || '',
+        displayName: currentUser.displayName,
+        photoURL: currentUser.photoURL,
+      });
+    }
+    if (!freshProfile) {
+      freshProfile = await getUserProfileData(currentUser.uid);
+    }
+    if (freshProfile) {
+      setUserProfile(freshProfile);
+    }
+
+    const credits = freshProfile?.credits ?? 0;
+
+    if (credits <= 0) {
+      alert("⚠️ Hisobingizda olmoslar (kreditlar) yetarli emas!\n\nDavom etish uchun tarif paketlaridan birini tanlang va hisobingizni to'ldiring.");
+      setIsPricingOpen(true);
+      return false;
+    }
+
     return true;
   };
 
@@ -385,14 +430,16 @@ const App: React.FC = () => {
     const isPrimaryAdmin = user.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
     if (isPrimaryAdmin) return;
 
-    if (userProfile && userProfile.credits > 0) {
+    try {
       const newPgCredits = await deductUserCreditInPostgres(user.uid);
       if (typeof newPgCredits === 'number') {
         setUserProfile(prev => prev ? { ...prev, credits: newPgCredits } : null);
-      } else {
+      } else if (userProfile && userProfile.credits > 0) {
         const newCredit = await deductUserCreditInFirestore(user.uid, userProfile.credits);
         setUserProfile(prev => prev ? { ...prev, credits: newCredit } : null);
       }
+    } catch (e) {
+      console.warn("Credit deduction error:", e);
     }
   };
 
