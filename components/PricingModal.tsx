@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { auth, signInWithGoogle, createPaymentRequestInFirestore } from '../lib/firebase';
+import { createPaymentRequestInPostgres } from '../lib/postgresService';
 
 interface PricingModalProps {
   isOpen: boolean;
@@ -33,7 +34,14 @@ export const PricingModal: React.FC<PricingModalProps> = ({ isOpen, onClose, onP
 
     setIsSubmitting(true);
     try {
-      await createPaymentRequestInFirestore(selectedPlan.name, selectedPlan.price);
+      if (auth.currentUser) {
+        await createPaymentRequestInPostgres(selectedPlan.name, selectedPlan.price, {
+          uid: auth.currentUser.uid,
+          email: auth.currentUser.email || '',
+          displayName: auth.currentUser.displayName || ''
+        });
+        await createPaymentRequestInFirestore(selectedPlan.name, selectedPlan.price).catch(() => {});
+      }
       setSubmittedMessage(`So'rov adminga yuborildi! Paynet to'lovini bajarib, chekni Telegram adminga (@Akramjon1984) yuboring.`);
       if (onPaymentSubmitted) onPaymentSubmitted();
     } catch (err: any) {

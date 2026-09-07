@@ -121,13 +121,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [bgmBuffer, setBgmBuffer] = useState<AudioBuffer | null>(null);
+  const [bgmStyle, setBgmStyle] = useState<'sharqona' | 'kinematik' | 'osuda' | 'lofi' | 'custom'>('sharqona');
+  const [customBgmBuffer, setCustomBgmBuffer] = useState<AudioBuffer | null>(null);
+  const [customBgmName, setCustomBgmName] = useState<string | null>(null);
   const [isBgmEnabled, setIsBgmEnabled] = useState(true);
-  const [bgmVolume, setBgmVolume] = useState(0.20); // 20% background music volume
+  const [bgmVolume, setBgmVolume] = useState(0.35); // 35% background music volume default
+  const [isPreviewingBgm, setIsPreviewingBgm] = useState(false);
   const [startTime, setStartTime] = useState<number>(0);
   
   const speechSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const bgmSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const bgmGainRef = useRef<GainNode | null>(null);
+  const previewBgmSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const previewBgmGainRef = useRef<GainNode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Store pre-rendered canvases and their motion vectors
   const [processedLayers, setProcessedLayers] = useState<ProcessedImageLayer[]>([]);
@@ -200,8 +207,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return buffer;
   };
 
-  // Helper: Generate Procedural Royalty-Free Mystical Ambient Background Music
-  const createAmbientBGMBuffer = (ctx: AudioContext, targetDuration: number): AudioBuffer => {
+  // Helper: Generate Procedural Royalty-Free Background Music based on Style
+  const createProceduralBGMBuffer = (ctx: AudioContext, targetDuration: number, style: string): AudioBuffer => {
     const sampleRate = ctx.sampleRate;
     const numChannels = 2;
     const safeDuration = Math.max(10, targetDuration + 10);
@@ -210,51 +217,204 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const left = buffer.getChannelData(0);
     const right = buffer.getChannelData(1);
 
-    // Mystical C minor & Ab major chord progression: Cm7, Abmaj7, Fm7, G7
-    const chords = [
-      [130.81, 155.56, 196.00, 233.08], // Cm7
-      [103.83, 130.81, 155.56, 196.00], // Abmaj7
-      [174.61, 207.65, 261.63, 311.13], // Fm7
-      [146.83, 185.00, 220.00, 293.66]  // G7
-    ];
-
-    for (let i = 0; i < frameCount; i++) {
-      const t = i / sampleRate;
-      const chordIndex = Math.floor(t / 6.0) % chords.length;
-      const currentChord = chords[chordIndex];
-
-      let sampleL = 0;
-      let sampleR = 0;
-
-      // Soft ambient synth pad
-      currentChord.forEach((freq, idx) => {
-        const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.12 * t + idx * 0.8);
-        const wave = Math.sin(2 * Math.PI * freq * t) * 0.25 + 0.12 * Math.sin(2 * Math.PI * freq * 2 * t);
-        sampleL += wave * lfo * (idx % 2 === 0 ? 0.75 : 0.4);
-        sampleR += wave * lfo * (idx % 2 === 1 ? 0.75 : 0.4);
-      });
-
-      // Gentle bell chime accent every 3 seconds
-      const chimePeriod = t % 3.0;
-      if (chimePeriod < 1.2) {
-        const chimeFreq = 523.25 * (1 + (chordIndex % 3) * 0.2); // C5 accent
-        const env = Math.exp(-3.5 * chimePeriod);
-        const chime = Math.sin(2 * Math.PI * chimeFreq * t) * env * 0.12;
-        sampleL += chime;
-        sampleR += chime;
+    if (style === 'sharqona') {
+      // 🕌 Sharqona / Sufiyona (Hijaz scale)
+      const droneFreq = 73.42; // D2 sub drone
+      const scale = [146.83, 155.56, 185.00, 196.00, 220.00, 233.08, 261.63, 293.66];
+      for (let i = 0; i < frameCount; i++) {
+        const t = i / sampleRate;
+        const droneLfo = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.15 * t);
+        const drone = (Math.sin(2 * Math.PI * droneFreq * t) * 0.35 + Math.sin(2 * Math.PI * droneFreq * 2 * t) * 0.15) * droneLfo;
+        const noteStep = Math.floor(t * 3.5);
+        const noteIdx = (noteStep * 3 + Math.floor(t * 0.7)) % scale.length;
+        const freq = scale[noteIdx];
+        const noteT = (t * 3.5) % 1.0;
+        const env = Math.exp(-4.0 * noteT);
+        const wave = (Math.sin(2 * Math.PI * freq * t) * 0.3 + 0.15 * Math.sin(2 * Math.PI * freq * 2 * t)) * env;
+        const beatT = t % 0.6;
+        const isKick = (Math.floor(t / 0.6) % 2 === 0);
+        let drum = 0;
+        if (isKick) {
+          drum = Math.sin(2 * Math.PI * 65.0 * Math.exp(-8.0 * beatT) * t) * Math.exp(-12.0 * beatT) * 0.30;
+        } else {
+          drum = (Math.random() * 2 - 1) * Math.exp(-25.0 * beatT) * 0.12;
+        }
+        const panL = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.2 * t);
+        const panR = 1.0 - panL;
+        let sampleL = drone * 0.4 + wave * panL * 0.5 + drum * 0.3;
+        let sampleR = drone * 0.4 + wave * panR * 0.5 + drum * 0.3;
+        let envM = 1.0;
+        if (t < 2.0) envM = t / 2.0;
+        if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.75 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.75 * envM));
       }
-
-      // Smooth master fade in & fade out
-      let masterEnv = 1.0;
-      if (t < 2.5) masterEnv = t / 2.5;
-      if (t > safeDuration - 2.5) masterEnv = Math.max(0, (safeDuration - t) / 2.5);
-
-      left[i] = Math.max(-1, Math.min(1, sampleL * 0.40 * masterEnv));
-      right[i] = Math.max(-1, Math.min(1, sampleR * 0.40 * masterEnv));
+    } else if (style === 'kinematik') {
+      // 🎹 Kinematik & Hissiyotli Piano
+      const chords = [
+        [130.81, 155.56, 196.00, 233.08], // Cm7
+        [103.83, 130.81, 155.56, 196.00], // Abmaj7
+        [155.56, 196.00, 233.08, 311.13], // Ebmaj7
+        [116.54, 146.83, 174.61, 233.08]  // Bb7
+      ];
+      for (let i = 0; i < frameCount; i++) {
+        const t = i / sampleRate;
+        const chordIdx = Math.floor(t / 4.0) % chords.length;
+        const chord = chords[chordIdx];
+        const arpStep = Math.floor(t * 4.0);
+        const arpNote = chord[arpStep % chord.length] * 2.0;
+        const arpT = (t * 4.0) % 1.0;
+        const arpEnv = Math.exp(-5.0 * arpT);
+        const pianoSample = Math.sin(2 * Math.PI * arpNote * t) * arpEnv * 0.35;
+        let padL = 0, padR = 0;
+        chord.forEach((f, idx) => {
+          const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.1 * t + idx);
+          const s = Math.sin(2 * Math.PI * f * t) * 0.15;
+          padL += s * lfo;
+          padR += s * (1 - lfo);
+        });
+        const beatT = t % 1.0;
+        const kick = Math.sin(2 * Math.PI * 55 * Math.exp(-10 * beatT) * t) * Math.exp(-15 * beatT) * 0.25;
+        let sampleL = pianoSample * 0.5 + padL * 0.4 + kick * 0.3;
+        let sampleR = pianoSample * 0.5 + padR * 0.4 + kick * 0.3;
+        let envM = 1.0;
+        if (t < 2.0) envM = t / 2.0;
+        if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+      }
+    } else if (style === 'osuda') {
+      // 🌿 Osuda Ambient
+      const scale = [174.61, 196.00, 220.00, 261.63, 293.66, 349.23];
+      for (let i = 0; i < frameCount; i++) {
+        const t = i / sampleRate;
+        const lfo1 = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.08 * t);
+        const lfo2 = 0.5 + 0.5 * Math.cos(2 * Math.PI * 0.08 * t);
+        const pad1 = Math.sin(2 * Math.PI * 174.61 * t) * 0.25;
+        const pad2 = Math.sin(2 * Math.PI * 220.00 * t) * 0.20;
+        const pad3 = Math.sin(2 * Math.PI * 261.63 * t) * 0.20;
+        const chimeT = t % 2.5;
+        const chimeNote = scale[Math.floor(t / 2.5) % scale.length] * 2.0;
+        const chimeEnv = Math.exp(-3.0 * chimeT);
+        const chime = Math.sin(2 * Math.PI * chimeNote * t) * chimeEnv * 0.25;
+        let sampleL = (pad1 + pad2) * lfo1 * 0.5 + chime * 0.4;
+        let sampleR = (pad1 + pad3) * lfo2 * 0.5 + chime * 0.4;
+        let envM = 1.0;
+        if (t < 2.0) envM = t / 2.0;
+        if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+      }
+    } else {
+      // ⚡ Zamonaviy Lofi Beat
+      for (let i = 0; i < frameCount; i++) {
+        const t = i / sampleRate;
+        const beatT = t % 0.6;
+        const step = Math.floor(t / 0.6) % 8;
+        let kick = 0;
+        if (step === 0 || step === 3) {
+          kick = Math.sin(2 * Math.PI * 60 * Math.exp(-12 * beatT) * t) * Math.exp(-10 * beatT) * 0.35;
+        }
+        let snare = 0;
+        if (step === 2 || step === 6) {
+          snare = (Math.random() * 2 - 1) * Math.exp(-20 * beatT) * 0.25;
+        }
+        const subBeatT = t % 0.3;
+        const hihat = (Math.random() * 2 - 1) * Math.exp(-40 * subBeatT) * 0.08;
+        const chords = [
+          [174.61, 220.00, 261.63, 329.63],
+          [146.83, 174.61, 220.00, 261.63],
+          [220.00, 261.63, 329.63, 392.00]
+        ];
+        const currentChord = chords[Math.floor(t / 2.4) % chords.length];
+        let chordSample = 0;
+        currentChord.forEach(f => {
+          chordSample += Math.sin(2 * Math.PI * f * t) * 0.08;
+        });
+        const vinyl = (Math.random() * 2 - 1) * 0.015;
+        let sampleL = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4 + vinyl;
+        let sampleR = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4 + vinyl;
+        let envM = 1.0;
+        if (t < 2.0) envM = t / 2.0;
+        if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+      }
     }
 
     return buffer;
   };
+
+  const stopPreviewBgm = () => {
+    if (previewBgmSourceRef.current) {
+      try { previewBgmSourceRef.current.stop(); } catch {}
+      previewBgmSourceRef.current = null;
+    }
+    setIsPreviewingBgm(false);
+  };
+
+  const togglePreviewBgm = async () => {
+    if (!audioContext) return;
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    if (isPreviewingBgm) {
+      stopPreviewBgm();
+    } else {
+      if (isPlaying) stopAudioSources();
+
+      const targetBuffer = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
+      if (!targetBuffer) return;
+
+      const source = audioContext.createBufferSource();
+      source.buffer = targetBuffer;
+      source.loop = true;
+      const gain = audioContext.createGain();
+      gain.gain.value = bgmVolume;
+      source.connect(gain);
+      gain.connect(audioContext.destination);
+      source.start(0);
+
+      previewBgmSourceRef.current = source;
+      previewBgmGainRef.current = gain;
+      setIsPreviewingBgm(true);
+    }
+  };
+
+  const handleCustomBgmUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const arrayBuffer = evt.target?.result as ArrayBuffer;
+        const ctx = audioContext || new (window.AudioContext || (window as any).webkitAudioContext)();
+        const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
+        setAudioContext(ctx);
+        setCustomBgmBuffer(decodedBuffer);
+        setCustomBgmName(file.name);
+        setBgmStyle('custom');
+        setBgmBuffer(decodedBuffer);
+      } catch (err) {
+        console.error("Custom BGM upload failed:", err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Re-generate or switch BGM when style changes
+  useEffect(() => {
+    if (!audioContext || !audioBuffer) return;
+    if (bgmStyle === 'custom') {
+      if (customBgmBuffer) {
+        setBgmBuffer(customBgmBuffer);
+      }
+      return;
+    }
+    const bgm = createProceduralBGMBuffer(audioContext, audioBuffer.duration, bgmStyle);
+    setBgmBuffer(bgm);
+  }, [bgmStyle, audioContext, audioBuffer, customBgmBuffer]);
 
   // 1. Initialize Audio
   useEffect(() => {
@@ -264,7 +424,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
         const bytes = decode(audioBase64);
         const buffer = pcmToAudioBuffer(bytes, ctx);
-        const bgm = createAmbientBGMBuffer(ctx, buffer.duration);
+        const bgm = createProceduralBGMBuffer(ctx, buffer.duration, bgmStyle);
         
         setAudioContext(ctx);
         setAudioBuffer(buffer);
@@ -1131,6 +1291,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       bgmSourceRef.current = null;
     }
 
+    stopPreviewBgm();
+
     // 1. Speech Audio
     const speechSource = audioContext.createBufferSource();
     speechSource.buffer = audioBuffer;
@@ -1139,14 +1301,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     speechSourceRef.current = speechSource;
 
     // 2. Background Music (if enabled)
-    if (isBgmEnabled && bgmBuffer) {
+    const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
+    if (isBgmEnabled && activeBgm) {
       const bgmSource = audioContext.createBufferSource();
-      bgmSource.buffer = bgmBuffer;
+      bgmSource.buffer = activeBgm;
+      bgmSource.loop = true;
       const bgmGain = audioContext.createGain();
       bgmGain.gain.value = bgmVolume;
       bgmSource.connect(bgmGain);
       bgmGain.connect(audioContext.destination);
-      bgmSource.start(0, offset);
+      const bgmOffset = offset % activeBgm.duration;
+      bgmSource.start(0, bgmOffset);
       bgmSourceRef.current = bgmSource;
       bgmGainRef.current = bgmGain;
     }
@@ -1163,6 +1328,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       try { bgmSourceRef.current.stop(); } catch {}
       bgmSourceRef.current = null;
     }
+    stopPreviewBgm();
   };
 
   // 5. Animation Loop (Playback)
@@ -1249,9 +1415,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       speechSource.start(0);
 
       // 2. Background Music Mixing (if enabled)
-      if (isBgmEnabled && bgmBuffer) {
+      const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
+      if (isBgmEnabled && activeBgm) {
         const bgmSource = recCtx.createBufferSource();
-        bgmSource.buffer = bgmBuffer;
+        bgmSource.buffer = activeBgm;
+        bgmSource.loop = true;
         const bgmGain = recCtx.createGain();
         bgmGain.gain.value = bgmVolume;
         bgmSource.connect(bgmGain);
@@ -1328,9 +1496,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           draw(elapsed);
 
           if (now - lastProgressUpdate > 80) {
-             const pct = Math.min(99, Math.round((elapsed / Math.max(1, duration)) * 100));
-             setDownloadProgress(pct);
-             lastProgressUpdate = now;
+              const pct = Math.min(99, Math.round((elapsed / Math.max(1, duration)) * 100));
+              setDownloadProgress(pct);
+              lastProgressUpdate = now;
           }
       };
 
@@ -1381,49 +1549,141 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
       
       {/* Fon Musiqasi Control Box */}
-      <div className="mt-4 w-full max-w-[300px] bg-slate-900/80 backdrop-blur-md p-3.5 rounded-2xl border border-slate-800 space-y-2.5 shadow-lg">
+      <div className="mt-4 w-full max-w-[340px] bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-800 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-sm">🎵</span>
-            <span className="text-xs font-bold text-slate-200">Fon Musiqasi</span>
+            <span className="text-base">🎵</span>
+            <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">Fon Musiqasi</span>
           </div>
-          <button
-            onClick={() => {
-              setIsBgmEnabled(!isBgmEnabled);
-              if (bgmGainRef.current) {
-                bgmGainRef.current.gain.value = !isBgmEnabled ? bgmVolume : 0;
-              }
-            }}
-            className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition ${
-              isBgmEnabled
-                ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                : 'bg-slate-800 text-slate-400 border-slate-700'
-            }`}
-          >
-            {isBgmEnabled ? '✓ Yoqilgan' : 'O\'chirilgan'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={togglePreviewBgm}
+              title="Fon musiqasini tinglab ko'rish"
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition flex items-center gap-1 ${
+                isPreviewingBgm
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+            >
+              {isPreviewingBgm ? '⏹ To\'xtatish' : '▶ Eshitib ko\'rish'}
+            </button>
+            <button
+              onClick={() => {
+                const nextState = !isBgmEnabled;
+                setIsBgmEnabled(nextState);
+                if (bgmGainRef.current) {
+                  bgmGainRef.current.gain.value = nextState ? bgmVolume : 0;
+                }
+                if (previewBgmGainRef.current) {
+                  previewBgmGainRef.current.gain.value = nextState ? bgmVolume : 0;
+                }
+              }}
+              className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition ${
+                isBgmEnabled
+                  ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
+                  : 'bg-slate-800 text-slate-400 border-slate-700'
+              }`}
+            >
+              {isBgmEnabled ? '✓ Yoqilgan' : 'O\'chirilgan'}
+            </button>
+          </div>
         </div>
 
         {isBgmEnabled && (
-          <div className="flex items-center gap-3 pt-1">
-            <span className="text-[10px] font-medium text-slate-400">Ovoz:</span>
-            <input
-              type="range"
-              min="0.05"
-              max="0.40"
-              step="0.05"
-              value={bgmVolume}
-              onChange={(e) => {
-                const v = parseFloat(e.target.value);
-                setBgmVolume(v);
-                if (bgmGainRef.current) {
-                  bgmGainRef.current.gain.value = v;
-                }
-              }}
-              className="w-full accent-brand-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
-            />
-            <span className="text-[10px] font-bold text-amber-300 w-7">{Math.round(bgmVolume * 100)}%</span>
-          </div>
+          <>
+            {/* Genre / Style Selection */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10px] font-medium text-slate-400">Musiqa uslubi:</span>
+              <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                <button
+                  onClick={() => { setBgmStyle('sharqona'); stopPreviewBgm(); }}
+                  className={`px-2.5 py-1.5 rounded-xl font-medium border text-left flex items-center gap-1.5 transition ${
+                    bgmStyle === 'sharqona'
+                      ? 'bg-brand-500/30 text-amber-300 border-brand-500/60 font-bold'
+                      : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🕌 Sharqona / Sufiyona</span>
+                </button>
+                <button
+                  onClick={() => { setBgmStyle('kinematik'); stopPreviewBgm(); }}
+                  className={`px-2.5 py-1.5 rounded-xl font-medium border text-left flex items-center gap-1.5 transition ${
+                    bgmStyle === 'kinematik'
+                      ? 'bg-brand-500/30 text-amber-300 border-brand-500/60 font-bold'
+                      : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🎹 Kinematik (Piano)</span>
+                </button>
+                <button
+                  onClick={() => { setBgmStyle('osuda'); stopPreviewBgm(); }}
+                  className={`px-2.5 py-1.5 rounded-xl font-medium border text-left flex items-center gap-1.5 transition ${
+                    bgmStyle === 'osuda'
+                      ? 'bg-brand-500/30 text-amber-300 border-brand-500/60 font-bold'
+                      : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+                  }`}
+                >
+                  <span>🌿 Osuda Ambient</span>
+                </button>
+                <button
+                  onClick={() => { setBgmStyle('lofi'); stopPreviewBgm(); }}
+                  className={`px-2.5 py-1.5 rounded-xl font-medium border text-left flex items-center gap-1.5 transition ${
+                    bgmStyle === 'lofi'
+                      ? 'bg-brand-500/30 text-amber-300 border-brand-500/60 font-bold'
+                      : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-800'
+                  }`}
+                >
+                  <span>⚡ Zamonaviy Lofi</span>
+                </button>
+              </div>
+
+              {/* Custom MP3 File Upload Option */}
+              <div className="pt-1">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleCustomBgmUpload}
+                  accept="audio/*"
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full px-2.5 py-1.5 rounded-xl text-[10px] font-medium border text-center flex items-center justify-center gap-1.5 transition ${
+                    bgmStyle === 'custom'
+                      ? 'bg-purple-500/30 text-purple-300 border-purple-500/60 font-bold'
+                      : 'bg-slate-800/60 hover:bg-slate-800 text-slate-300 border-slate-700/60'
+                  }`}
+                >
+                  <span>📂</span>
+                  <span>{customBgmName ? `Fayl: ${customBgmName.substring(0, 22)}...` : "O'z MP3 musiqa faylingizni yuklang"}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Volume Slider */}
+            <div className="flex items-center gap-3 pt-1">
+              <span className="text-[10px] font-medium text-slate-400">Ovoz:</span>
+              <input
+                type="range"
+                min="0.05"
+                max="0.80"
+                step="0.05"
+                value={bgmVolume}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setBgmVolume(v);
+                  if (bgmGainRef.current) {
+                    bgmGainRef.current.gain.value = v;
+                  }
+                  if (previewBgmGainRef.current) {
+                    previewBgmGainRef.current.gain.value = v;
+                  }
+                }}
+                className="w-full accent-brand-500 h-1.5 bg-slate-800 rounded-lg cursor-pointer"
+              />
+              <span className="text-[10px] font-bold text-amber-300 w-8">{Math.round(bgmVolume * 100)}%</span>
+            </div>
+          </>
         )}
       </div>
 

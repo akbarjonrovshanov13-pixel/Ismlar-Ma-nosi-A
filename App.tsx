@@ -21,6 +21,14 @@ import {
   deductUserCreditInFirestore,
   UserProfileDocument
 } from './lib/firebase';
+import {
+  getUserProfileFromPostgres,
+  syncUserWithPostgres,
+  deductUserCreditInPostgres,
+  saveVideoToPostgres,
+  getUserSavedVideosFromPostgres,
+  deleteSavedVideoFromPostgres
+} from './lib/postgresService';
 import { User, onAuthStateChanged } from 'firebase/auth';
 
 const DEFAULT_OUTRO_TEXT = "Ismni eslab qoldingiz. Endi bizni ham eslab qoling: Luxe Core — qadoqlash uchun kerakli hamma narsa.";
@@ -85,7 +93,21 @@ const App: React.FC = () => {
 
   const fetchUserProfile = async (targetUser: User | null = user) => {
     if (targetUser) {
-      const p = await getUserProfileData(targetUser.uid);
+      // 1. Try PostgreSQL first
+      let p = await getUserProfileFromPostgres(targetUser.uid);
+      if (!p) {
+        // Sync user to PostgreSQL if missing
+        p = await syncUserWithPostgres({
+          uid: targetUser.uid,
+          email: targetUser.email || '',
+          displayName: targetUser.displayName,
+          photoURL: targetUser.photoURL,
+        });
+      }
+      // 2. Fallback to Firestore if PostgreSQL not available
+      if (!p) {
+        p = await getUserProfileData(targetUser.uid);
+      }
       setUserProfile(p);
     } else {
       setUserProfile(null);
@@ -104,8 +126,16 @@ const App: React.FC = () => {
     if (!user) return;
     setIsLoadingSavedVideos(true);
     try {
-      const videos = await getUserSavedVideos();
-      setSavedVideosList(videos);
+      // Fetch from PostgreSQL
+      let videos = await getUserSavedVideosFromPostgres(user.uid);
+      if (!videos || videos.length === 0) {
+        // Fallback to Firestore if Postgres has no videos or connection pending
+        const firestoreVideos = await getUserSavedVideos();
+        if (firestoreVideos && firestoreVideos.length > 0) {
+          videos = firestoreVideos;
+        }
+      }
+      setSavedVideosList(videos || []);
     } catch (err) {
       console.error("Failed to fetch saved videos:", err);
     } finally {
@@ -125,16 +155,27 @@ const App: React.FC = () => {
 
     setIsSavingToCloud(true);
     try {
-      await saveVideoToFirestore({
+      const payload = {
         topic: state.videoData.topic,
         script: state.videoData.script,
         fullScript: state.videoData.fullScript,
         hashtags: state.videoData.hashtags,
         imageUrls: state.videoData.imageUrls,
         captionStyle,
-        voice
-      });
-      setCloudNotification("Loyiha bulutga saqlandi! ☁️✨");
+        voice,
+        userId: user?.uid || '',
+        userEmail: user?.email || '',
+      };
+
+      try {
+        // Primary: PostgreSQL
+        await saveVideoToPostgres(payload);
+      } catch (pgErr) {
+        console.warn("Postgres saqlashda xato, Firestore ga zaxira qilindi:", pgErr);
+        await saveVideoToFirestore(payload);
+      }
+
+      setCloudNotification("Loyiha PostgreSQL bazasiga saqlandi! 🐘✨");
       setTimeout(() => setCloudNotification(null), 3500);
     } catch (err: any) {
       alert("Xatolik: " + (err.message || "Videoni saqlab bo'lmadi"));
@@ -164,8 +205,10 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSavedVideo = async (videoId: string) => {
+    if (!user) return;
     try {
-      await deleteSavedVideoFromFirestore(videoId);
+      await deleteSavedVideoFromPostgres(videoId, user.uid);
+      await deleteSavedVideoFromFirestore(videoId).catch(() => {});
       setSavedVideosList(prev => prev.filter(v => v.id !== videoId));
     } catch (err) {
       console.error("Delete failed:", err);
@@ -343,8 +386,13 @@ const App: React.FC = () => {
     if (isPrimaryAdmin) return;
 
     if (userProfile && userProfile.credits > 0) {
-      const newCredit = await deductUserCreditInFirestore(user.uid, userProfile.credits);
-      setUserProfile(prev => prev ? { ...prev, credits: newCredit } : null);
+      const newPgCredits = await deductUserCreditInPostgres(user.uid);
+      if (typeof newPgCredits === 'number') {
+        setUserProfile(prev => prev ? { ...prev, credits: newPgCredits } : null);
+      } else {
+        const newCredit = await deductUserCreditInFirestore(user.uid, userProfile.credits);
+        setUserProfile(prev => prev ? { ...prev, credits: newCredit } : null);
+      }
     }
   };
 

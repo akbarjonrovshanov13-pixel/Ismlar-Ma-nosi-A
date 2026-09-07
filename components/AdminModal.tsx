@@ -8,6 +8,13 @@ import {
   adminRejectPayment,
   updateUserCreditsInFirestore
 } from '../lib/firebase';
+import {
+  getAllUsersForAdminFromPostgres,
+  getAllPaymentsForAdminFromPostgres,
+  adminApprovePaymentInPostgres,
+  adminRejectPaymentInPostgres,
+  updateUserCreditsInPostgres
+} from '../lib/postgresService';
 
 interface AdminModalProps {
   isOpen: boolean;
@@ -51,12 +58,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
-      const [allUsers, allPayments] = await Promise.all([
-        getAllUsersForAdmin(),
-        getAllPaymentRequestsForAdmin()
+      // 1. Try PostgreSQL first
+      let [pgUsers, pgPayments] = await Promise.all([
+        getAllUsersForAdminFromPostgres(),
+        getAllPaymentsForAdminFromPostgres()
       ]);
-      setUsers(allUsers);
-      setPayments(allPayments);
+
+      if (!pgUsers.length) {
+        pgUsers = await getAllUsersForAdmin();
+      }
+      if (!pgPayments.length) {
+        pgPayments = await getAllPaymentRequestsForAdmin();
+      }
+
+      setUsers(pgUsers);
+      setPayments(pgPayments);
     } catch (err) {
       console.error("Failed to load admin data:", err);
     } finally {
@@ -78,7 +94,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     if (!payment.id) return;
     const creditsToAdd = overrideCredits ?? (payment.planName.includes('10') ? 10 : 3);
     try {
-      await adminApprovePayment(payment.id, payment.userId, creditsToAdd);
+      await adminApprovePaymentInPostgres(payment.id, creditsToAdd);
+      await adminApprovePayment(payment.id, payment.userId, creditsToAdd).catch(() => {});
       alert(`Muvaffaqiyatli! ${payment.userEmail} uchun +${creditsToAdd} ta ism/video taqdim etildi va holat tasdiqlandi.`);
       loadAdminData();
       if (onRefreshUserProfile) onRefreshUserProfile();
@@ -89,7 +106,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const handleRejectPayment = async (paymentId: string) => {
     try {
-      await adminRejectPayment(paymentId);
+      await adminRejectPaymentInPostgres(paymentId);
+      await adminRejectPayment(paymentId).catch(() => {});
       loadAdminData();
     } catch (err: any) {
       alert("Xatolik: " + err.message);
@@ -99,7 +117,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const handleQuickAddCredits = async (userId: string, currentCredits: number, addAmount: number) => {
     try {
       const newTotal = (currentCredits || 0) + addAmount;
-      await updateUserCreditsInFirestore(userId, newTotal, true);
+      await updateUserCreditsInPostgres(userId, newTotal, true);
+      await updateUserCreditsInFirestore(userId, newTotal, true).catch(() => {});
       alert(`Foydalanuvchiga +${addAmount} ta video kredit berildi!`);
       loadAdminData();
       if (onRefreshUserProfile) onRefreshUserProfile();
@@ -110,7 +129,8 @@ export const AdminModal: React.FC<AdminModalProps> = ({
 
   const handleCustomSetCredits = async (userId: string) => {
     try {
-      await updateUserCreditsInFirestore(userId, editCreditsInput, editCreditsInput > 0);
+      await updateUserCreditsInPostgres(userId, editCreditsInput, editCreditsInput > 0);
+      await updateUserCreditsInFirestore(userId, editCreditsInput, editCreditsInput > 0).catch(() => {});
       setEditUserId(null);
       alert(`Limit yangilandi: ${editCreditsInput} ta video.`);
       loadAdminData();

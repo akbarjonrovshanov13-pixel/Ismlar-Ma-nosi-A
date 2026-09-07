@@ -1,5 +1,5 @@
 {
-  "name": "3-ismlar-ma'nosi-ai",
+  "name": "ismlar-manosi-ai",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:push": "drizzle-kit push --config=./src/db/drizzle.config.ts",
+    "db:generate": "drizzle-kit generate --config=./src/db/drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config=./src/db/drizzle.config.ts"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
