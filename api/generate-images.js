@@ -48,7 +48,21 @@ export const TYPOGRAPHY_STYLES = [
 
 const buildVideoFramePrompt = (name, concept, font) => {
   const clean = String(name).trim().toUpperCase().slice(0, 20);
-  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D luxury personalized name art sculpture spelling the exact word "${clean}". The dimensional letterforms are custom-sculpted in ${font.prompt}. ${concept.art}. Centered composition, massive clearly readable Latin letters, perfectly formed individual glyphs, photorealistic Octane render 8k, dramatic cinematic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition, absolute visual perfection. The only text visible in the entire image is "${clean}".`;
+  return `Vertical 9:16 smartphone wallpaper key visual. A breathtaking 3D luxury personalized name art sculpture spelling the exact word "${clean}".
+
+CRITICAL TYPOGRAPHY & SPELLING:
+- The entire word "${clean}" MUST be rendered on a SINGLE HORIZONTAL LINE from left to right.
+- NEVER split or break the name into multiple lines. NEVER stack letters vertically (do NOT write "SAR" on one line and "DOR" below it). All ${clean.length} letters must sit side-by-side on ONE continuous horizontal baseline.
+- Exact spelling: "${clean}" (${clean.length} Latin letters). Render each letter exactly once, no duplicated letters, no missing letters.
+- Typography: The dimensional letterforms are custom-sculpted in ${font.prompt}.
+
+ARTWORK & MATERIAL:
+- ${concept.art}.
+
+COMPOSITION & SAFE AREA:
+- Positioned horizontally centered in the upper-middle area (between 35% and 55% vertical height), spanning 65-80% canvas width with elegant margins.
+- CRITICAL: Keep the bottom 30% of the canvas clean with soft atmospheric background, subtle ambient light, and negative space so video subtitles can be displayed with 100% clarity without overlapping the name sculpture.
+- Photorealistic Octane render 8k, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition masterpiece. The ONLY text visible anywhere in the entire image is "${clean}".`;
 };
 
 // Fallback scene enhancers if no name topic is provided:
