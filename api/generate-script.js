@@ -42,8 +42,6 @@ export default async function handler(req, res) {
     const { topic, useSearch, hookStyle } = req.body || {};
     if (!topic) return res.status(400).json({ error: "topic maydoni kerak" });
 
-    const ai = getVertexAI();
-
     let hookInstructions = "";
     if (hookStyle === "SHOCK") {
       hookInstructions = "\n- **VIRAL HOOK STYLE:** Qat'iy ravishda SHOK / HAYRATLANARLI fakt bilan boshlang. Masalan: 'Agar ismingiz [ISM] bo'lsa, bu videoni o'chirib yubormang. Hayotingizdagi eng katta sirni ochamiz!' yoki shunga o'xshash sirlilik va drama darajasi o'ta yuqori bo'lgan boshlanish.";
@@ -61,15 +59,21 @@ export default async function handler(req, res) {
       hookInstructions = "\n- **VIRAL HOOK STYLE:** Tasodifiy eng jozibali, portlovchi va noodatiy hook turlaridan birini ishlating.";
     }
 
-    const models = ["gemini-2.5-flash", "gemini-2.5-pro"];
+    const models = [
+      { name: "gemini-3.8-flash", loc: "global" },
+      { name: "gemini-3.1-pro-preview", loc: "global" },
+      { name: "gemini-3.1-flash-lite", loc: "global" },
+      { name: "gemini-2.5-flash", loc: "us-central1" },
+    ];
     let lastError = null;
 
-    for (const model of models) {
+    for (const m of models) {
       try {
+        const ai = getVertexAI(m.loc);
         const response = await retry(() =>
           ai.models.generateContent({
-            model,
-            contents: `Ism: "${topic}". Ushby ismning tub ma'nosi, tarixi va psixologik portretini to'liq ochib beruvchi 60 soniyalik viral ssenariy yozing.${hookInstructions}`,
+            model: m.name,
+            contents: `Ism: "${topic}". Ushbu ismning tub ma'nosi, tarixi va psixologik portretini to'liq ochib beruvchi 60 soniyalik viral ssenariy yozing.${hookInstructions}`,
             config: {
               systemInstruction: SCRIPT_SYSTEM_INSTRUCTION,
               responseMimeType: "application/json",
