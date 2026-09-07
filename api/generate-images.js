@@ -1,4 +1,5 @@
 import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
+import { NAME_ART_CONCEPTS } from "../nameArtConcepts.js";
 
 // Same-origin fallback (used only if both Vertex AI and Pollinations AI fail) —
 // Cinematic 9:16 vertical aesthetic scene wallpapers
@@ -9,16 +10,48 @@ const HD_WALLPAPERS = [
   "/fallback/scene-4.jpg",
 ];
 
-const nameHeroPrompt = (name) => {
+// 8 distinct non-repeating typography font families for extreme visual variety:
+export const TYPOGRAPHY_STYLES = [
+  {
+    id: "imperial-serif",
+    prompt: "monumental imperial serif typography with sharp chiseled brackets, classical Roman capital proportions, and noble aristocratic serif detailing"
+  },
+  {
+    id: "calligraphic-script",
+    prompt: "flowing calligraphic ribbon script typography with graceful continuous curves, sweeping flourished ligatures, and romantic sculptural swashes"
+  },
+  {
+    id: "faceted-geometric",
+    prompt: "precision-cut geometric display typography with ultra-sharp angular facets, crystalline beveled edges, and bold architectural 3D structure"
+  },
+  {
+    id: "didone-luxury",
+    prompt: "high-fashion luxury display typography with razor-sharp delicate hairlines, commanding bold structural stems, and refined neoclassical curves"
+  },
+  {
+    id: "monolithic-block",
+    prompt: "massive monumental sans-serif typography with ultra-heavy dimensional block letterforms, chamfered beveled corners, and formidable presence"
+  },
+  {
+    id: "fluid-avantgarde",
+    prompt: "avant-garde fluid dynamic typography with continuous melting organic curves, sculpted contours, and futuristic elegance"
+  },
+  {
+    id: "expressive-brush",
+    prompt: "expressive sculptural brushstroke typography with dynamic volumetric sweep, handcrafted textured ridges, and artistic momentum"
+  },
+  {
+    id: "minimalist-bauhaus",
+    prompt: "ultra-modern minimalist display typography with pure circular geometries, clean architectural negative space, and crisp contemporary lines"
+  }
+];
+
+const buildVideoFramePrompt = (name, concept, font) => {
   const clean = String(name).trim().toUpperCase().slice(0, 20);
-  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D luxury typographic sculpture spelling the exact word "${clean}". Massive dimensional Latin letters with beveled edges, sculpted from polished 24k gold with platinum reflections, centered majestically on a reflective black obsidian pedestal. Dramatic cinematic volumetric studio lighting, warm rim lights, dark elegant background, Octane render 8k, photorealistic masterpiece. The only text visible in the entire image is "${clean}".`;
+  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D luxury personalized name art sculpture spelling the exact word "${clean}". The dimensional letterforms are custom-sculpted in ${font.prompt}. ${concept.art}. Centered composition, massive clearly readable Latin letters, perfectly formed individual glyphs, photorealistic Octane render 8k, dramatic cinematic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition, absolute visual perfection. The only text visible in the entire image is "${clean}".`;
 };
 
-// 4 distinct narrative-aligned scene enhancers for the video story:
-// 0: Majestic Identity / Subject
-// 1: Secret Psychology & Hidden Depths
-// 2: Warmth, Love & Emotional Resonance
-// 3: Destiny, Power & Timeless Legacy
+// Fallback scene enhancers if no name topic is provided:
 const SCENE_ENHANCERS = [
   (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Cinematic luxury aesthetic, dramatic rim lighting, majestic composition, 8k resolution, photorealistic, no text, no letters, no words.`,
   (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Enigmatic and atmospheric scene, deep volumetric moody lighting, ethereal haze, rich color palette, cinematic mystery, 8k resolution, photorealistic, no text, no letters, no words.`,
@@ -35,8 +68,16 @@ export default async function handler(req, res) {
   try {
     const { prompts, topic } = req.body || {};
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
+    const hasTopic = topic && String(topic).trim().length > 0;
 
-    const heroIndex = topic && String(topic).trim() ? 0 : -1;
+    // Pick 4 unique concepts and 4 unique typography styles per generation run
+    const shuffledConcepts = [...NAME_ART_CONCEPTS].sort(() => 0.5 - Math.random());
+    const shuffledFonts = [...TYPOGRAPHY_STYLES].sort(() => 0.5 - Math.random());
+
+    const frameSetups = [0, 1, 2, 3].map((i) => ({
+      concept: shuffledConcepts[i % shuffledConcepts.length],
+      font: shuffledFonts[i % shuffledFonts.length]
+    }));
 
     let aiAvailable = true;
     try {
@@ -49,15 +90,18 @@ export default async function handler(req, res) {
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     const generateOne = async (p, index) => {
-      const enhanced = index === heroIndex
-        ? nameHeroPrompt(topic)
+      const setup = frameSetups[index % frameSetups.length];
+      const enhanced = hasTopic
+        ? buildVideoFramePrompt(topic, setup.concept, setup.font)
         : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
 
       // Check cache first to avoid redundant API calls
-      const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `scene:${index}:${enhanced}`;
+      const cacheKey = hasTopic
+        ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
+        : `scene:${index}:${enhanced}`;
       const cached = getCachedImage(cacheKey);
       if (cached) {
-        console.log(`Using cached image for prompt index ${index}`);
+        console.log(`Using cached image for frame index ${index}`);
         return cached;
       }
 
@@ -118,15 +162,18 @@ export default async function handler(req, res) {
 
       // If Vertex AI did not produce an image, try Pollinations AI before static wallpapers
       if (!generated) {
-        console.log(`Generating prompt ${index} using Pollinations AI fallback...`);
-        const enhanced = index === heroIndex
-          ? nameHeroPrompt(topic)
+        console.log(`Generating frame ${index} using Pollinations AI fallback...`);
+        const setup = frameSetups[index % frameSetups.length];
+        const enhanced = hasTopic
+          ? buildVideoFramePrompt(topic, setup.concept, setup.font)
           : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
 
         const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
         if (pollinationsImg) {
           generated = pollinationsImg;
-          const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `scene:${index}:${enhanced}`;
+          const cacheKey = hasTopic
+            ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
+            : `scene:${index}:${enhanced}`;
           setCachedImage(cacheKey, pollinationsImg);
         }
       }

@@ -7,60 +7,70 @@ export const NAME_ART_CONCEPTS = [
     id: "royal",
     label: "Royal Gold & Obsidian",
     uz: "Qirolona Oltin",
+    typography: "monumental imperial Roman serif typography with sharp chiseled brackets and noble aristocratic proportions",
     art: "Massive 3D polished 24k solid gold typography with beveled edges, standing centered on a glossy black obsidian marble pedestal. Overhead dramatic volumetric warm studio spotlight, sharp raytraced reflections, subtle floating gold dust particles, deep charcoal luxury atmosphere, regal prestige aesthetic"
   },
   {
     id: "nature",
     label: "Emerald Botanical & Bloom",
     uz: "Zumrad Tabiat",
+    typography: "organic sculptural calligraphic letterforms entwined with blooming nature, delicate leafy ligatures, and fluid natural curves",
     art: "Dimensional architectural letterforms sculpted from smooth white jade stone, intricately entwined with vibrant green moss, fresh blooming pink orchid petals, jasmine flowers, and sparkling morning dew drops. Sunlit forest canopy with soft golden sunbeams breaking through, lush botanical realism"
   },
   {
     id: "cosmic",
     label: "Cosmic Nebula & Starlight",
     uz: "Koinot & Yulduzlar",
+    typography: "ethereal luminous dimensional display typography with celestial curves, floating galactic geometry, and crystalline presence",
     art: "Luminous celestial glass typography glowing from within, filled with swirling violet, deep indigo and magenta nebulae and glittering star clusters. Floating in deep outer space with distant stellar galaxies, ethereal glowing aura, epic celestial majesty"
   },
   {
     id: "urban",
     label: "Liquid Chrome & Cyber Neon",
     uz: "Kiber Neon & Xrom",
+    typography: "futuristic fluid liquid chrome dynamic typography with sleek cybernetic contours, continuous melting curves, and high-tech elegance",
     art: "Mirror-finish liquid mercury chrome typography illuminated by vibrant electric cyan, magenta and teal neon tube reflections. Set against dark rain-slicked city asphalt at night, dramatic Blade Runner style reflections, high-tech cinematic aesthetic"
   },
   {
     id: "minimal",
     label: "Architectural Travertine",
     uz: "Zamonaviy Arxitektura",
+    typography: "monolithic brutalist architectural display typography with clean geometric block cuts, sharp negative space, and museum-grade proportions",
     art: "Monumental architectural display typography carved from smooth warm beige travertine limestone, integrated into minimalist brutalist museum architecture. Sharp geometric diagonal natural sunlight shadows, clean negative space, ultra-high-end editorial luxury"
   },
   {
     id: "floral",
     label: "Mother of Pearl & Silk",
     uz: "Nafis Gullar & Marvarid",
+    typography: "flowing delicate calligraphic ribbon script with romantic flourished cursive swashes and exquisite sculpted feminine curves",
     art: "Exquisite 3D typography sculpted from shimmering mother-of-pearl and frosted rose quartz, surrounded by cascading delicate silk ribbons, pastel cherry blossoms, and blooming peony flowers. Soft warm golden-hour lighting, dreamy aesthetic, ethereal elegance"
   },
   {
     id: "fire",
     label: "Volcanic Basalt & Magma",
     uz: "Olovli Vulqon",
+    typography: "rugged colossal chiseled rock typography with jagged internal magma fissures, heavy monumental stems, and primordial power",
     art: "Colossal monumental basalt volcanic rock typography with glowing internal fractures of bright burning orange-gold molten lava and magma. Rising cinematic fiery embers, subtle smoke drifts, subterranean cavern with dramatic high-contrast fiery glow"
   },
   {
     id: "art",
     label: "Watercolor & 24k Gold Leaf",
     uz: "Akvarel & Zarchop",
+    typography: "expressive dynamic fine-art brushstroke typography with bold volumetric sweep, textured impasto edges, and handcrafted artistic momentum",
     art: "Bold artistic sculptural typography enveloped in an explosive splash of vibrant turquoise, ultramarine, and royal magenta watercolor pigments. Accented with handcrafted 24k real gold leaf foil flakes, set against clean textured fine-art watercolor paper, dynamic masterwork"
   },
   {
     id: "crystal",
     label: "Crystal Prism & Diamond",
     uz: "Kristall & Olmos",
+    typography: "precision diamond-cut faceted geometric typography with ultra-sharp prismatic angular edges, optical caustics, and architectural cuts",
     art: "Precision-cut monolithic typography sculpted from pure flawless optical prism crystal and faceted diamond. Brilliant rainbow dispersion flares, sharp realistic glass caustics and refractions, floating on a dark velvety studio background with clean rim light"
   },
   {
     id: "ice",
     label: "Northern Lights & Glacial Ice",
     uz: "Shimol Yog'dusi & Muz",
+    typography: "towering translucent arctic glacial display typography with crisp chiseled frost edges, crystalline facets, and majestic vertical scale",
     art: "Towering translucent iceberg typography sculpted from crystalline arctic glacier ice, illuminated from within by the vibrant dancing green and sapphire lights of the Aurora Borealis (Northern Lights). Crisp snowy mist, starry night sky, frozen masterpiece"
   },
 ];
@@ -76,7 +86,8 @@ const toneFor = (gender) =>
 
 export const buildNameArtPrompt = (name, gender, concept) => {
   const clean = cleanName(name);
-  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D personalized name art sculpture spelling the exact word "${clean}". ${concept.art}. Centered in the frame, large and clearly readable Latin alphabet typography, perfectly formed letters, ${toneFor(gender)}. Octane render 8k, photorealistic, dramatic studio lighting, sharp depth of field, ultra-detailed. The only text visible in the entire image is "${clean}".`;
+  const typo = concept.typography || "custom 3D architectural typography";
+  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D personalized name art sculpture spelling the exact word "${clean}". The dimensional letterforms are custom-sculpted in ${typo}. ${concept.art}. Centered in the frame, large and clearly readable Latin alphabet typography, perfectly formed letters, ${toneFor(gender)}. Octane render 8k, photorealistic, dramatic studio lighting, sharp depth of field, ultra-detailed. The only text visible in the entire image is "${clean}".`;
 };
 
 // The full brief a user pastes into an external text-to-image tool. The "not image editing"
@@ -86,7 +97,6 @@ export const buildNameArtPrompt = (name, gender, concept) => {
 // model has to invent its own, which is what stops the set reading as one design in ten skins.
 export const buildExternalImagePrompt = (name, gender) => {
   const clean = cleanName(name) || "ISM";
-  const letters = clean.split("").join("-");
   const g = gender === "FEMALE" ? "FEMALE" : gender === "MALE" ? "MALE" : "UNISEX";
 
   return `SUPER PREMIUM NAME ART — FINAL MASTER PROMPT
@@ -94,7 +104,7 @@ export const buildExternalImagePrompt = (name, gender) => {
 INPUT
 Name: ${clean}
 Gender: ${g}
-Exact spelling: ${letters} (${clean.length} letters, Latin alphabet)
+Exact spelling: "${clean}" (${clean.length} letters, Latin alphabet, no hyphens, continuous word)
 
 MODE — CRITICAL
 This is a FRESH TEXT-TO-IMAGE task.
