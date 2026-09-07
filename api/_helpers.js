@@ -50,16 +50,18 @@ export function getVertexAI(locationOverride) {
 /**
  * Pollinations AI image generator fallback.
  * 100% free, open access text-to-image API without requiring any API keys or credentials.
+ * Uses Flux.1 model for high-fidelity 9:16 aesthetic images.
  * Returns base64 data URI (data:image/jpeg;base64,...).
  */
 export async function fetchPollinationsImage(prompt, width = 768, height = 1344) {
   try {
     const seed = Math.floor(Math.random() * 10000000);
-    const cleanPrompt = encodeURIComponent(String(prompt).slice(0, 400));
-    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true`;
+    const enhanced = `${String(prompt).trim().slice(0, 320)}, masterpiece, 8k, photorealistic, cinematic lighting, 9:16 vertical aspect ratio, ultra-detailed`;
+    const cleanPrompt = encodeURIComponent(enhanced);
+    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=flux`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 14000); // 14s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -84,27 +86,21 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
 
 /**
  * Executes a request with automatic multi-model and multi-region quota fallback.
- * If a model (e.g. gemini-2.5-flash-image) or region hits 429 (RESOURCE_EXHAUSTED) or is unavailable,
- * this automatically cascades through fallback models (imagen-3.0-generate-002, imagen-3.0-fast-generate-001, gemini-3.1-flash-lite-image)
- * and across GCP regions.
+ * Prioritizes gemini-2.5-flash-image across active regions (us-central1, us-east4, europe-west1, global).
  */
 export async function executeWithQuotaFallback(
   apiRunner,
   models = [
-    "gemini-2.5-flash-image",
-    "gemini-3.1-flash-lite-image",
-    "imagen-3.0-generate-002",
-    "imagen-3.0-fast-generate-001"
+    "gemini-2.5-flash-image"
   ]
 ) {
-  const defaultLoc = process.env.GCP_LOCATION || "global";
+  const defaultLoc = process.env.GCP_LOCATION || "us-central1";
   const locations = [
     defaultLoc,
     "us-central1",
     "us-east4",
     "europe-west1",
-    "asia-east1",
-    "us-west1",
+    "global"
   ];
   const uniqueLocations = [...new Set(locations)];
   let lastError = null;

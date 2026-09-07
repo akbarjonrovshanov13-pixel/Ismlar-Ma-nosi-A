@@ -462,7 +462,7 @@ const App: React.FC = () => {
           script: customSegments,
           fullScript: fullScriptWithOutro,
           hashtags: draftHashtags.length ? [...draftHashtags, "#luxecore", "#qadoqlash"] : ["#ismlar", "#luxecore", "#qadoqlash"],
-          imageUrls: finalImages.length ? finalImages : ["/fallback/cup.jpg"],
+          imageUrls: finalImages.length ? finalImages : ["/fallback/scene-1.jpg"],
           audioBase64,
           imagePrompts: draftImagePrompts,
           sources: state.videoData?.sources || []

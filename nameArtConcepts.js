@@ -1,35 +1,82 @@
 // The ten premium name-art directions driving the in-app renderer (api/generate-name-art.js).
 // Deliberately NOT part of buildExternalImagePrompt below: a chat model handed both this list
 // and the master brief would treat the list as the answer, which is exactly the fixed
-// royal → nature → cosmic sequence that brief forbids. Kept as plain .js because the client
-// imports the builders from this same file.
+// sequence that brief forbids. Kept as plain .js because the client imports the builders from this same file.
 export const NAME_ART_CONCEPTS = [
-  { id: "royal", label: "Royal Luxury", uz: "Royal", art: "deep charcoal-black background, elegant polished gold typography, restrained regal geometry, high-end luxury lighting, sophisticated and understated" },
-  { id: "nature", label: "Nature Integrated", uz: "Tabiat", art: "letters physically built from moss, stone and wood in a photorealistic forest clearing, golden-hour light, deep natural realism" },
-  { id: "cosmic", label: "Cosmic", uz: "Kosmos", art: "deep space with stars and a soft nebula, letters in luminous chrome and glass, epic but refined, cool celestial glow" },
-  { id: "urban", label: "Urban Premium", uz: "Shahar", art: "cinematic modern city at night, wet reflective streets and glass architecture, letters integrated into the environment, ambitious polished mood" },
-  { id: "minimal", label: "Minimal Luxury", uz: "Minimal", art: "very clean composition, neutral dark premium backdrop, huge embossed matte stone letters, strong controlled shadows, minimal and expensive" },
-  { id: "floral", label: "Floral Elegant", uz: "Gul", art: "letters interwoven with realistic fresh flowers, leaves, pearl and silk, graceful composition, soft premium lighting" },
-  { id: "fire", label: "Fire & Power", uz: "Olov", art: "letters forged from molten metal with glowing hot edges and drifting sparks, dark dramatic contrast, controlled cinematic fire" },
-  { id: "art", label: "Artistic Colour", uz: "Rang", art: "bold expressive lettering shaped by colour powder explosion and paint splash, energetic street-art texture, professionally composed, letters stay crisp" },
-  { id: "crystal", label: "Glass & Crystal", uz: "Kristall", art: "letters cut from clear crystal and faceted gemstones, studio product-photography lighting, elegant reflections and caustics" },
-  { id: "symbolic", label: "Symbolic Scene", uz: "Ramziy", art: "one symbolic object matching the meaning of the name (a key, moon, mountain path, fountain pen, butterfly or bridge), letters integrated naturally and elegantly into the scene" },
+  {
+    id: "royal",
+    label: "Royal Gold & Obsidian",
+    uz: "Qirolona Oltin",
+    art: "Massive 3D polished 24k solid gold typography with beveled edges, standing centered on a glossy black obsidian marble pedestal. Overhead dramatic volumetric warm studio spotlight, sharp raytraced reflections, subtle floating gold dust particles, deep charcoal luxury atmosphere, regal prestige aesthetic"
+  },
+  {
+    id: "nature",
+    label: "Emerald Botanical & Bloom",
+    uz: "Zumrad Tabiat",
+    art: "Dimensional architectural letterforms sculpted from smooth white jade stone, intricately entwined with vibrant green moss, fresh blooming pink orchid petals, jasmine flowers, and sparkling morning dew drops. Sunlit forest canopy with soft golden sunbeams breaking through, lush botanical realism"
+  },
+  {
+    id: "cosmic",
+    label: "Cosmic Nebula & Starlight",
+    uz: "Koinot & Yulduzlar",
+    art: "Luminous celestial glass typography glowing from within, filled with swirling violet, deep indigo and magenta nebulae and glittering star clusters. Floating in deep outer space with distant stellar galaxies, ethereal glowing aura, epic celestial majesty"
+  },
+  {
+    id: "urban",
+    label: "Liquid Chrome & Cyber Neon",
+    uz: "Kiber Neon & Xrom",
+    art: "Mirror-finish liquid mercury chrome typography illuminated by vibrant electric cyan, magenta and teal neon tube reflections. Set against dark rain-slicked city asphalt at night, dramatic Blade Runner style reflections, high-tech cinematic aesthetic"
+  },
+  {
+    id: "minimal",
+    label: "Architectural Travertine",
+    uz: "Zamonaviy Arxitektura",
+    art: "Monumental architectural display typography carved from smooth warm beige travertine limestone, integrated into minimalist brutalist museum architecture. Sharp geometric diagonal natural sunlight shadows, clean negative space, ultra-high-end editorial luxury"
+  },
+  {
+    id: "floral",
+    label: "Mother of Pearl & Silk",
+    uz: "Nafis Gullar & Marvarid",
+    art: "Exquisite 3D typography sculpted from shimmering mother-of-pearl and frosted rose quartz, surrounded by cascading delicate silk ribbons, pastel cherry blossoms, and blooming peony flowers. Soft warm golden-hour lighting, dreamy aesthetic, ethereal elegance"
+  },
+  {
+    id: "fire",
+    label: "Volcanic Basalt & Magma",
+    uz: "Olovli Vulqon",
+    art: "Colossal monumental basalt volcanic rock typography with glowing internal fractures of bright burning orange-gold molten lava and magma. Rising cinematic fiery embers, subtle smoke drifts, subterranean cavern with dramatic high-contrast fiery glow"
+  },
+  {
+    id: "art",
+    label: "Watercolor & 24k Gold Leaf",
+    uz: "Akvarel & Zarchop",
+    art: "Bold artistic sculptural typography enveloped in an explosive splash of vibrant turquoise, ultramarine, and royal magenta watercolor pigments. Accented with handcrafted 24k real gold leaf foil flakes, set against clean textured fine-art watercolor paper, dynamic masterwork"
+  },
+  {
+    id: "crystal",
+    label: "Crystal Prism & Diamond",
+    uz: "Kristall & Olmos",
+    art: "Precision-cut monolithic typography sculpted from pure flawless optical prism crystal and faceted diamond. Brilliant rainbow dispersion flares, sharp realistic glass caustics and refractions, floating on a dark velvety studio background with clean rim light"
+  },
+  {
+    id: "ice",
+    label: "Northern Lights & Glacial Ice",
+    uz: "Shimol Yog'dusi & Muz",
+    art: "Towering translucent iceberg typography sculpted from crystalline arctic glacier ice, illuminated from within by the vibrant dancing green and sapphire lights of the Aurora Borealis (Northern Lights). Crisp snowy mist, starry night sky, frozen masterpiece"
+  },
 ];
 
 const cleanName = (name) => String(name).trim().toUpperCase().slice(0, 20);
 
 const toneFor = (gender) =>
-  gender === "FEMALE" ? "graceful feminine" : gender === "MALE" ? "strong masculine" : "balanced";
+  gender === "FEMALE"
+    ? "soft graceful elegance, pearlescent highlights"
+    : gender === "MALE"
+    ? "strong monumental presence, sharp defined edges"
+    : "balanced timeless luxury";
 
-// Spelling the name out letter by letter is what makes the model get it right — asked plainly
-// for "MALIKA" it renders "MAUKA". Kept deliberately short on negatives: a long "no text, no
-// letters, no words…" list makes the model return a response with no image at all.
 export const buildNameArtPrompt = (name, gender, concept) => {
   const clean = cleanName(name);
-  const letters = clean.split("").join("-");
-  // "Written across a single horizontal line" matters: in a 9:16 frame the model otherwise
-  // stacks the letters one per row, which reads as a column rather than a wordmark.
-  return `Premium vertical name-art poster. The word ${letters} (spelled "${clean}", ${clean.length} letters, Latin alphabet) is the hero of the image, written across ONE single horizontal line in the middle of the frame, large and clearly readable, every letter distinct and unobstructed. Style: ${concept.art}. Overall tone ${toneFor(gender)}, art-directed, cinematic colour grading, realistic materials. One single standalone artwork filling the frame, not a collage or grid. The only text is ${clean}.`;
+  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D personalized name art sculpture spelling the exact word "${clean}". ${concept.art}. Centered in the frame, large and clearly readable Latin alphabet typography, perfectly formed letters, ${toneFor(gender)}. Octane render 8k, photorealistic, dramatic studio lighting, sharp depth of field, ultra-detailed. The only text visible in the entire image is "${clean}".`;
 };
 
 // The full brief a user pastes into an external text-to-image tool. The "not image editing"

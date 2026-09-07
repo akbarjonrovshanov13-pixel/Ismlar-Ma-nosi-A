@@ -42,15 +42,10 @@ export default async function handler(req, res) {
             return await ai.models.generateContent({
               model: modelToUse,
               contents: [{ role: "user", parts: [{ text: buildNameArtPrompt(name, gender, concept) }] }],
-              config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
+              config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
             });
           },
-          [
-            "gemini-2.5-flash-image",
-            "gemini-3.1-flash-lite-image",
-            "imagen-3.0-generate-002",
-            "imagen-3.0-fast-generate-001"
-          ]
+          ["gemini-2.5-flash-image"]
         );
 
         const part = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);

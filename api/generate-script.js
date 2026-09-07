@@ -22,11 +22,15 @@ matn yozing. "script_segments" ichida ham to'liq, tayyor gaplar bo'lishi shart):
 MUHIM: "script_segments" videodagi subtitr matni. full_script esa aynan shu segmentlardan
 tashkil topadi — ikkalasi bir xil matn bo'lishi kerak, faqat biri bo'lingan, biri yaxlit.
 
-IMAGE_PROMPTS_EN UCHUN QAT'IY QOIDALAR:
-1. Rasmda HECH QANDAY YOZUV bo'lmasin — matn, harf, so'z, ism, kalligrafiya (arabcha, lotin yoki boshqa yozuv), plakat yozuvi, logotip yoki raqam. Ism videoda subtitr orqali ko'rsatiladi, rasmga yozish SHART EMAS. Promptda "typography", "text", "letters", "calligraphy", "name written" kabi so'zlarni umuman ishlatmang.
+IMAGE_PROMPTS_EN UCHUN QAT'IY QOIDALAR (Videodagi 4 ta asosiy bosqich uchun 4 ta kinematografik sahna):
+- 1-prompt: Ismning aslzodaligi va mahobatini ifodalovchi hashamatli, yuksak atmosfera (masalan: saroy zali, oltin va marvarid jilosi, nurli arkada).
+- 2-prompt: Ism egasining yashirin psixologiyasi va sirli ichki olami (masalan: sirli tumanli ko'l, kristall g'or, qadimiy kutubxona, tungi sokin atmosfera).
+- 3-prompt: Qalb iliqligi, samimiyat va joziba (masalan: oltin soat quyosh nuri, iliq shafaq, gullagan bog', mayin yorug'lik zarrachalari).
+- 4-prompt: Quvvat, ildiz va buyuk kelajak (masalan: mahobatli tog' cho'qqisi, tonggi ufq, qudratli qadimiy qasr yoki cheksiz osmon).
+1. Rasmda HECH QANDAY YOZUV bo'lmasin — matn, harf, so'z, ism, kalligrafiya, plakat yozuvi, logotip yoki raqam. Promptda "typography", "text", "letters", "calligraphy", "name written" kabi so'zlarni umuman ishlatmang.
 2. Diniy ramzlar, muqaddas yozuvlar va sig'inish belgilaridan foydalanmang.
-3. Har bir prompt BITTA aniq sahnani tasvirlasin. Bitta promptga bir nechta bog'liqsiz narsani (masalan sher + tog' + saroy + odam + ramzlar) yig'maganingiz muhim — aks holda rasm chalkash va bema'ni chiqadi.
-4. Faqat atmosfera tasvirlansin: manzara yoki bitta obyekt, rang palitrasi, yorug'lik, fon va kayfiyat. Odam yuzini yaqindan ko'rsatmang.
+3. Har bir prompt BITTA aniq sahnani tasvirlasin.
+4. Odam yuzini yaqindan ko'rsatmang (siluet yoki atmosfera tasvirlansin).
 5. Prompt ingliz tilida, qisqa va aniq bo'lsin (taxminan 15-25 so'z).
 `;
 

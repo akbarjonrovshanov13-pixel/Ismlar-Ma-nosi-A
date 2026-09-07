@@ -1,27 +1,29 @@
 import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
 
 // Same-origin fallback (used only if both Vertex AI and Pollinations AI fail) —
-// branded Luxe Core product shots instead of generic stock wallpaper.
+// Cinematic 9:16 vertical aesthetic scene wallpapers
 const HD_WALLPAPERS = [
-  "/fallback/cup.jpg",
-  "/fallback/container.jpg",
-  "/fallback/clamshell.jpg",
-  "/fallback/drink.jpg",
+  "/fallback/scene-1.jpg",
+  "/fallback/scene-2.jpg",
+  "/fallback/scene-3.jpg",
+  "/fallback/scene-4.jpg",
 ];
-
-const NO_TEXT_RULE = ", without any writing or lettering";
 
 const nameHeroPrompt = (name) => {
   const clean = String(name).trim().toUpperCase().slice(0, 20);
-  const letters = clean.split("").join("-");
-  return `3D golden metallic capital letters arranged to spell ${letters} (the word "${clean}", ${clean.length} letters), Latin alphabet, resting on polished obsidian black marble, warm cinematic lighting, luxurious and elegant, 8k. Render exactly these ${clean.length} letters and nothing else, no other writing.`;
+  return `Vertical 9:16 smartphone wallpaper. A masterpiece 3D luxury typographic sculpture spelling the exact word "${clean}". Massive dimensional Latin letters with beveled edges, sculpted from polished 24k gold with platinum reflections, centered majestically on a reflective black obsidian pedestal. Dramatic cinematic volumetric studio lighting, warm rim lights, dark elegant background, Octane render 8k, photorealistic masterpiece. The only text visible in the entire image is "${clean}".`;
 };
 
-const STYLE_SUFFIXES = [
-  ", luxurious royal gold and obsidian black marble surfaces, ambient warm glowing light, elegant high-end atmosphere, cinematic lighting, 8k" + NO_TEXT_RULE,
-  ", cosmic starry sky, glowing nebula in deep indigo and violet tones, ethereal light flares, bokeh, highly aesthetic, 8k" + NO_TEXT_RULE,
-  ", magical forest, glowing emerald and sapphire light beams, sun rays filtering through trees, enchanted mystical atmosphere, extremely photorealistic, 8k" + NO_TEXT_RULE,
-  ", cinematic warm sunset golden hour, soft pastel tones, dreamlike atmosphere, highly artistic and elegant background, 8k" + NO_TEXT_RULE,
+// 4 distinct narrative-aligned scene enhancers for the video story:
+// 0: Majestic Identity / Subject
+// 1: Secret Psychology & Hidden Depths
+// 2: Warmth, Love & Emotional Resonance
+// 3: Destiny, Power & Timeless Legacy
+const SCENE_ENHANCERS = [
+  (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Cinematic luxury aesthetic, dramatic rim lighting, majestic composition, 8k resolution, photorealistic, no text, no letters, no words.`,
+  (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Enigmatic and atmospheric scene, deep volumetric moody lighting, ethereal haze, rich color palette, cinematic mystery, 8k resolution, photorealistic, no text, no letters, no words.`,
+  (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Warm golden hour lighting, gentle glowing ambient light, emotional and poetic atmosphere, soft bokeh, delicate beauty, 8k resolution, photorealistic, no text, no letters, no words.`,
+  (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Epic grand scale vista, majestic horizon, triumphant cinematic lighting, timeless strength and nobility, ultra-detailed 8k masterpiece, no text, no letters, no words.`
 ];
 
 export const config = { maxDuration: 60 };
@@ -49,31 +51,26 @@ export default async function handler(req, res) {
     const generateOne = async (p, index) => {
       const enhanced = index === heroIndex
         ? nameHeroPrompt(topic)
-        : p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
+        : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
 
       // Check cache first to avoid redundant API calls
-      const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `style:${index}:${enhanced}`;
+      const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `scene:${index}:${enhanced}`;
       const cached = getCachedImage(cacheKey);
       if (cached) {
         console.log(`Using cached image for prompt index ${index}`);
         return cached;
       }
 
-      // Execute with multi-model and multi-region quota fallback
+      // Execute with multi-region quota fallback using verified gemini-2.5-flash-image
       const response = await executeWithQuotaFallback(
         async (ai, loc, modelToUse) => {
           return await ai.models.generateContent({
             model: modelToUse,
             contents: [{ role: "user", parts: [{ text: enhanced }] }],
-            config: { responseModalities: ["IMAGE", "TEXT"], imageConfig: { aspectRatio: "9:16" } },
+            config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
           });
         },
-        [
-          "gemini-2.5-flash-image",
-          "gemini-3.1-flash-lite-image",
-          "imagen-3.0-generate-002",
-          "imagen-3.0-fast-generate-001"
-        ]
+        ["gemini-2.5-flash-image"]
       );
 
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
@@ -124,12 +121,12 @@ export default async function handler(req, res) {
         console.log(`Generating prompt ${index} using Pollinations AI fallback...`);
         const enhanced = index === heroIndex
           ? nameHeroPrompt(topic)
-          : p + STYLE_SUFFIXES[index % STYLE_SUFFIXES.length];
+          : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
 
         const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
         if (pollinationsImg) {
           generated = pollinationsImg;
-          const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `style:${index}:${enhanced}`;
+          const cacheKey = index === heroIndex ? `hero:${String(topic).trim().toUpperCase()}` : `scene:${index}:${enhanced}`;
           setCachedImage(cacheKey, pollinationsImg);
         }
       }
