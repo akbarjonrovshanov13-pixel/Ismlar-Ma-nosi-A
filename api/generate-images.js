@@ -128,7 +128,7 @@ export default async function handler(req, res) {
             config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
           });
         },
-        ["gemini-3.1-flash-lite-image", "gemini-2.5-flash-image"]
+        ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
       );
 
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
@@ -139,61 +139,42 @@ export default async function handler(req, res) {
       return imgData;
     };
 
-    const isQuotaError = (err) => /429|RESOURCE_EXHAUSTED|Quota exceeded/i.test(err?.message || "");
-    const RETRY_BACKOFF_MS = [1000, 2000];
-    let isBatchQuotaExhausted = false;
-
-    const images = [];
-    for (let index = 0; index < validPrompts.length; index++) {
-      const p = validPrompts[index];
+    const processFrame = async (p, index) => {
       let generated = null;
-
-      if (aiAvailable && !isBatchQuotaExhausted) {
-        if (index > 0) {
-          await sleep(500);
-        }
-
-        for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
-          try {
-            generated = await generateOne(p, index);
-            break;
-          } catch (err) {
-            const last = attempt === RETRY_BACKOFF_MS.length;
-            if (isQuotaError(err)) {
-              console.warn(`Gemini image quota exhausted across regions for prompt ${index}, using Pollinations AI fallback:`, err.message);
-              isBatchQuotaExhausted = true;
-              break;
-            }
-            if (last) {
-              console.warn(`Gemini image generation failed for prompt ${index}, using Pollinations AI fallback:`, err.message);
-              break;
-            }
-            console.warn(`Gemini image generation failed for prompt ${index}, retrying...`, err.message);
-            await sleep(RETRY_BACKOFF_MS[attempt]);
-          }
+      if (aiAvailable) {
+        try {
+          generated = await generateOne(p, index);
+        } catch (err) {
+          console.warn(`Frame ${index} Vertex AI generation failed, using Pollinations AI:`, err.message);
         }
       }
 
-      // If Vertex AI did not produce an image, try Pollinations AI before static wallpapers
+      // If Vertex AI did not produce an image, use Pollinations AI Turbo before static wallpapers
       if (!generated) {
-        console.log(`Generating frame ${index} using Pollinations AI fallback...`);
         const setup = frameSetups[index % frameSetups.length];
         const enhanced = hasTopic
           ? buildVideoFramePrompt(topic, setup.concept, setup.font)
           : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
 
-        const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
-        if (pollinationsImg) {
-          generated = pollinationsImg;
-          const cacheKey = hasTopic
-            ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
-            : `scene:${index}:${enhanced}`;
-          setCachedImage(cacheKey, pollinationsImg);
+        try {
+          const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
+          if (pollinationsImg) {
+            generated = pollinationsImg;
+            const cacheKey = hasTopic
+              ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
+              : `scene:${index}:${enhanced}`;
+            setCachedImage(cacheKey, pollinationsImg);
+          }
+        } catch (pollErr) {
+          console.warn(`Pollinations AI failed for frame ${index}:`, pollErr.message);
         }
       }
 
-      images.push(generated || HD_WALLPAPERS[index % HD_WALLPAPERS.length]);
-    }
+      return generated || HD_WALLPAPERS[index % HD_WALLPAPERS.length];
+    };
+
+    // Generate all frames in parallel for lightning-fast response (< 5s)
+    const images = await Promise.all(validPrompts.map((p, idx) => processFrame(p, idx)));
 
     return res.status(200).json({ images });
   } catch (err) {

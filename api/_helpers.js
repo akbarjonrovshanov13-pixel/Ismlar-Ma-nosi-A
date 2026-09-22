@@ -40,8 +40,9 @@ export function getVertexAI(locationOverride) {
   }
 
   // Fallback to direct Gemini API key if GCP private key is missing
-  if (process.env.GEMINI_API_KEY) {
-    return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const directKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (directKey) {
+    return new GoogleGenAI({ apiKey: directKey });
   }
 
   throw new Error("GCP Service Account kaliti sozlanmagan");
@@ -50,7 +51,7 @@ export function getVertexAI(locationOverride) {
 /**
  * Pollinations AI image generator fallback.
  * 100% free, open access text-to-image API without requiring any API keys or credentials.
- * Uses Flux.1 model for high-fidelity 9:16 aesthetic images.
+ * Uses Turbo model for ultra-fast, high-fidelity 9:16 aesthetic images.
  * Returns base64 data URI (data:image/jpeg;base64,...).
  */
 export async function fetchPollinationsImage(prompt, width = 768, height = 1344) {
@@ -58,10 +59,10 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
     const seed = Math.floor(Math.random() * 10000000);
     const enhanced = `${String(prompt).trim().slice(0, 320)}, masterpiece, 8k, photorealistic, cinematic lighting, 9:16 vertical aspect ratio, ultra-detailed`;
     const cleanPrompt = encodeURIComponent(enhanced);
-    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=flux`;
+    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=true&model=turbo`;
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -123,14 +124,15 @@ export async function executeWithQuotaFallback(
     }
   }
 
-  // Direct GEMINI_API_KEY fallback as last resort across models
-  if (process.env.GEMINI_API_KEY) {
+  // Direct GEMINI_API_KEY / API_KEY fallback as last resort across models
+  const directFallbackKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (directFallbackKey) {
     for (const model of models) {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const ai = new GoogleGenAI({ apiKey: directFallbackKey });
         return await apiRunner(ai, "direct-api", model);
       } catch (err) {
-        console.warn(`Direct GEMINI_API_KEY fallback with model "${model}" failed:`, err.message);
+        console.warn(`Direct API_KEY fallback with model "${model}" failed:`, err.message);
       }
     }
   }

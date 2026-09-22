@@ -45,7 +45,7 @@ export default async function handler(req, res) {
               config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
             });
           },
-          ["gemini-3.1-flash-lite-image", "gemini-2.5-flash-image"]
+          ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
         );
 
         const part = response.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
