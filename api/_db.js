@@ -97,6 +97,8 @@ export async function ensureTables() {
     console.warn("PostgreSQL: ensureTables bajarilmadi (baza sozlanmagan bo'lishi mumkin):", err.message);
     throw err;
   }
+}
+
 export async function query(text, params = []) {
   try {
     const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
