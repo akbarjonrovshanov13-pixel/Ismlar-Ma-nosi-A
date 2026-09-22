@@ -1,5 +1,20 @@
 {
   "functions": {
+    "api/generate-script.js": {
+      "maxDuration": 60
+    },
+    "api/generate-images.js": {
+      "maxDuration": 60
+    },
+    "api/generate-audio.js": {
+      "maxDuration": 60
+    },
+    "api/align-subtitles.js": {
+      "maxDuration": 60
+    },
+    "api/generate-name-art.js": {
+      "maxDuration": 60
+    },
     "api/*.js": {
       "maxDuration": 60
     }

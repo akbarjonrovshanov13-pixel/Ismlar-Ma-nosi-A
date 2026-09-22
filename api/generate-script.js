@@ -37,6 +37,9 @@ QAT'IY QOIDALAR:
 4. Har bir prompt ingliz tilida, o'ta ta'sirli va sifatli bo'lsin (taxminan 15-25 so'z).
 `;
 
+export const maxDuration = 60;
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -63,10 +66,10 @@ export default async function handler(req, res) {
     }
 
     const models = [
-      { name: "gemini-3.8-flash", loc: "global" },
-      { name: "gemini-3.1-pro-preview", loc: "global" },
       { name: "gemini-3.1-flash-lite", loc: "global" },
       { name: "gemini-2.5-flash", loc: "us-central1" },
+      { name: "gemini-3.8-flash", loc: "global" },
+      { name: "gemini-3.1-pro-preview", loc: "global" },
     ];
     let lastError = null;
 

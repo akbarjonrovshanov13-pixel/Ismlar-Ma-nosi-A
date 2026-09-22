@@ -32,6 +32,9 @@ function splitIntoChunks(text, targetChunks) {
   return chunks;
 }
 
+export const maxDuration = 60;
+export const config = { maxDuration: 60 };
+
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
