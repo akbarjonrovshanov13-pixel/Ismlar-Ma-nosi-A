@@ -22,7 +22,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const ADMIN_PASSWORDS = ['1984', 'Akramjon1984', 'admin123', 'admin'];
+  const ADMIN_PASSWORDS = ['Hisobot201415!'];
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -92,7 +92,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onLoginSuccess(adminUser);
       onClose();
     } else {
-      setErrorMsg("Xato Admin paroli! (Masalan: 1984 yoki Akramjon1984)");
+      setErrorMsg("Xato Admin paroli!");
     }
   };
 

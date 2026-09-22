@@ -40,7 +40,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [editCreditsInput, setEditCreditsInput] = useState<number>(5);
 
-  const ADMIN_PASSKEYS = ['1984', 'Akramjon1984', 'admin123', 'admin'];
+  const ADMIN_PASSKEYS = ['Hisobot201415!'];
 
   useEffect(() => {
     // Auto unlock if logged in as primary admin email
@@ -86,7 +86,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       setIsUnlocked(true);
       loadAdminData();
     } else {
-      alert("Xato Admin paroli! (Masalan: 1984 yoki Akramjon1984)");
+      alert("Xato Admin paroli!");
     }
   };
 
@@ -173,7 +173,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
             </div>
             <div>
               <h4 className="text-xl font-bold text-white">Admin Kirish Kodu</h4>
-              <p className="text-xs text-slate-400 mt-1">Admin panelga kirish uchun maxfiy parolni kiriting (@Akramjon1984)</p>
+              <p className="text-xs text-slate-400 mt-1">Admin panelga kirish uchun maxfiy parolni kiriting</p>
             </div>
 
             <form onSubmit={handleUnlock} className="space-y-3">
@@ -181,7 +181,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 type="password"
                 value={passkey}
                 onChange={(e) => setPasskey(e.target.value)}
-                placeholder="Admin PIN paroli (masalan: 1984)"
+                placeholder="Admin maxfiy paroli"
                 className="w-full bg-slate-950 border border-slate-800 rounded-2xl px-4 py-3 text-sm text-center text-white focus:outline-none focus:border-red-500 transition"
               />
               <button
@@ -191,7 +191,6 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 Admin Panelni Ochish 🔑
               </button>
             </form>
-            <p className="text-[10px] text-slate-500">Parol: <code className="text-amber-400">1984</code> yoki <code className="text-amber-400">Akramjon1984</code></p>
           </div>
         ) : (
           /* Main Admin Content */
