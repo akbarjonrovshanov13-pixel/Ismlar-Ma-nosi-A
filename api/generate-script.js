@@ -22,16 +22,19 @@ matn yozing. "script_segments" ichida ham to'liq, tayyor gaplar bo'lishi shart):
 MUHIM: "script_segments" videodagi subtitr matni. full_script esa aynan shu segmentlardan
 tashkil topadi — ikkalasi bir xil matn bo'lishi kerak, faqat biri bo'lingan, biri yaxlit.
 
-IMAGE_PROMPTS_EN UCHUN QAT'IY QOIDALAR (Videodagi 4 ta asosiy bosqich uchun 4 ta kinematografik sahna):
-- 1-prompt: Ismning aslzodaligi va mahobatini ifodalovchi hashamatli, yuksak atmosfera (masalan: saroy zali, oltin va marvarid jilosi, nurli arkada).
-- 2-prompt: Ism egasining yashirin psixologiyasi va sirli ichki olami (masalan: sirli tumanli ko'l, kristall g'or, qadimiy kutubxona, tungi sokin atmosfera).
-- 3-prompt: Qalb iliqligi, samimiyat va joziba (masalan: oltin soat quyosh nuri, iliq shafaq, gullagan bog', mayin yorug'lik zarrachalari).
-- 4-prompt: Quvvat, ildiz va buyuk kelajak (masalan: mahobatli tog' cho'qqisi, tonggi ufq, qudratli qadimiy qasr yoki cheksiz osmon).
-1. Rasmda HECH QANDAY YOZUV bo'lmasin — matn, harf, so'z, ism, kalligrafiya, plakat yozuvi, logotip yoki raqam. Promptda "typography", "text", "letters", "calligraphy", "name written" kabi so'zlarni umuman ishlatmang.
-2. Diniy ramzlar, muqaddas yozuvlar va sig'inish belgilaridan foydalanmang.
-3. Har bir prompt BITTA aniq sahnani tasvirlasin.
-4. Odam yuzini yaqindan ko'rsatmang (siluet yoki atmosfera tasvirlansin).
-5. Prompt ingliz tilida, qisqa va aniq bo'lsin (taxminan 15-25 so'z).
+IMAGE_PROMPTS_EN UCHUN QAT'IY TALABLAR (Videodagi 4 ta asosiy bosqich uchun 4 ta kinematografik sahna):
+Har bir prompt aynan shu ISMNING ASL TUB MA'NOSI (masalan: jasurlik/mardlik, nafosat/go'zallik, donolik/ilm, nur/quyosh, dengiz/ummon, qudrat va h.k.) hamda jinsiga (erkak/ayol) 100% MOS KELADIGAN kinematografik, go'zal sahna bo'lishi shart!
+
+1-prompt: Ismning asosiy tub ma'nosi va ruhi (Masalan: agar ism mardlik/jasurlik bo'lsa (Daler, Rustam, Bahodir, Temur, Jasur) — mag'rur qoya cho'qqisida turgan botir qahramon silueti, burgut yoki sher mahobati, tog'li qadimiy qal'a; agar ism go'zallik/nafosat bo'lsa (Madina, Rayhona, Sevara, Nilufar) — tonggi shafaqdagi gullagan sehrli bog', billur suv jilosi; agar nur/quyosh bo'lsa — buyuk charog'on nur taralishi).
+2-prompt: Ism egasining yashirin ichki olami va fe'l-atvori (masalan: sirli sokin ko'l, yulduzli cheksiz osmon, qadimiy muhtasham kutubxona, teran sokin atmosfera).
+3-prompt: Qalb kuchi, samimiyat va tuyg'ular (masalan: oltin quyosh nurlari, iliq mayin shafaq, tog'lar ortidagi yorug'lik zarrachalari).
+4-prompt: Buyuk kelajak, g'alaba va yuksaklik (masalan: tonggi ufqda mahobatli tog' cho'qqisi, erkin cheksiz osmon, g'alabali yuksak panorama).
+
+QAT'IY QOIDALAR:
+1. Rasmda HECH QANDAY YOZUV, MATN yoki HARFLAR bo'lmasin. Promptda "typography", "text", "letters", "calligraphy", "name" so'zlarini umuman ishlatmang.
+2. Diniy ramzlar va sig'inish belgilaridan foydalanmang.
+3. Odam yuzini yaqindan ko'rsatmang (faqat siluet, orqa tomondan yoki ulug'vor manzara).
+4. Har bir prompt ingliz tilida, o'ta ta'sirli va sifatli bo'lsin (taxminan 15-25 so'z).
 `;
 
 export default async function handler(req, res) {

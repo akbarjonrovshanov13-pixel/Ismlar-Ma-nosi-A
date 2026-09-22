@@ -103,23 +103,35 @@ export default async function handler(req, res) {
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+    const buildFramePrompt = (promptText, topicName, frameIndex) => {
+      const isDetailed = promptText && String(promptText).trim().length > 15 && String(promptText).trim().toLowerCase() !== String(topicName || "").toLowerCase();
+      
+      if (isDetailed) {
+        // Use the AI-generated prompt specifically tailored to this name's meaning
+        const clean = String(promptText).replace(/["']/g, "").trim();
+        return `Vertical 9:16 smartphone wallpaper key visual. ${clean}. Masterpiece, cinematic lighting, 8k resolution, photorealistic, majestic composition, atmospheric depth, ultra-detailed, dramatic studio lighting, clean background, no text, no letters, no words, no watermark.`;
+      }
+
+      // Fallback if no detailed prompt was provided
+      if (topicName && String(topicName).trim().length > 0) {
+        return `Vertical 9:16 smartphone wallpaper key visual. Majestic cinematic aesthetic scene symbolizing the noble spirit of "${topicName}". Dramatic lighting, epic landscape, golden hour glow, 8k resolution, photorealistic masterpiece, no text, no letters, no words, no watermark.`;
+      }
+
+      return SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText);
+    };
+
     const generateOne = async (p, index) => {
-      const setup = frameSetups[index % frameSetups.length];
-      const enhanced = hasTopic
-        ? buildVideoFramePrompt(topic, setup.concept, setup.font)
-        : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
+      const enhanced = buildFramePrompt(p, topic, index);
 
       // Check cache first to avoid redundant API calls
-      const cacheKey = hasTopic
-        ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
-        : `scene:${index}:${enhanced}`;
+      const cacheKey = `frame_scene:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
       const cached = getCachedImage(cacheKey);
       if (cached) {
         console.log(`Using cached image for frame index ${index}`);
         return cached;
       }
 
-      // Execute with multi-region quota fallback using verified gemini-2.5-flash-image
+      // Execute with multi-region quota fallback
       const response = await executeWithQuotaFallback(
         async (ai, loc, modelToUse) => {
           return await ai.models.generateContent({
@@ -151,18 +163,13 @@ export default async function handler(req, res) {
 
       // If Vertex AI did not produce an image, use Pollinations AI Turbo before static wallpapers
       if (!generated) {
-        const setup = frameSetups[index % frameSetups.length];
-        const enhanced = hasTopic
-          ? buildVideoFramePrompt(topic, setup.concept, setup.font)
-          : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p);
+        const enhanced = buildFramePrompt(p, topic, index);
 
         try {
           const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
           if (pollinationsImg) {
             generated = pollinationsImg;
-            const cacheKey = hasTopic
-              ? `nameart_vid:${String(topic).trim().toUpperCase()}:${setup.concept.id}:${setup.font.id}`
-              : `scene:${index}:${enhanced}`;
+            const cacheKey = `frame_scene:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
             setCachedImage(cacheKey, pollinationsImg);
           }
         } catch (pollErr) {
