@@ -683,7 +683,7 @@ const App: React.FC = () => {
       if (state.videoData && state.videoData.imageUrls.length > 0 && imageMode !== ImageMode.GENERATE) {
         finalImages = state.videoData.imageUrls;
       } else if (imageMode === ImageMode.GENERATE) {
-        finalImages = await generateImages(draftImagePrompts.length ? draftImagePrompts : [topic], topic);
+        finalImages = await generateImages(draftImagePrompts.length ? draftImagePrompts : [topic], topic, undefined, nameArtGender);
       } else if (imageMode === ImageMode.FIND) {
         finalImages = await findImages(topic);
       } else {
@@ -743,7 +743,8 @@ const App: React.FC = () => {
           topic,
           (cur, total) => {
             setState(prev => ({ ...prev, loadingStep: `Sehrli rasmlar va kadrlar chizilmoqda (${cur}/${total})...` }));
-          }
+          },
+          nameArtGender
         );
       } else if (imageMode === ImageMode.FIND) {
         finalImages = await findImages(topic);

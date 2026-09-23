@@ -77,7 +77,7 @@ export const NAME_ART_CONCEPTS = [
 
 const cleanName = (name) => String(name).trim().toUpperCase().slice(0, 20);
 
-const toneFor = (gender) =>
+export const toneFor = (gender) =>
   gender === "FEMALE"
     ? "soft graceful elegance, pearlescent highlights"
     : gender === "MALE"

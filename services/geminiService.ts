@@ -88,7 +88,8 @@ export const generateAudio = async (text: string, voiceType: VoiceType): Promise
 export const generateImages = async (
   prompts: string[],
   topic?: string,
-  onProgress?: (current: number, total: number) => void
+  onProgress?: (current: number, total: number) => void,
+  gender?: string
 ): Promise<string[]> => {
   const validPrompts = (prompts && prompts.length > 0) ? prompts.slice(0, 4) : [topic || "Ism"];
   const finalImages: string[] = [];
@@ -100,7 +101,7 @@ export const generateImages = async (
       const res = await fetch(`${API_BASE}/generate-images.js`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: validPrompts[i], topic, frameIndex: i }),
+        body: JSON.stringify({ prompt: validPrompts[i], topic, frameIndex: i, gender }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -124,7 +125,7 @@ export const generateImages = async (
     const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompts: validPrompts, topic }),
+      body: JSON.stringify({ prompts: validPrompts, topic, gender }),
     });
     if (res.ok) {
       const data = await res.json();

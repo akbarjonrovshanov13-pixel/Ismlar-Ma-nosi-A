@@ -1,5 +1,5 @@
 import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
-import { NAME_ART_CONCEPTS } from "../nameArtConcepts.js";
+import { NAME_ART_CONCEPTS, toneFor } from "../nameArtConcepts.js";
 
 // Same-origin fallback (used only if both Vertex AI and Pollinations AI fail) —
 // Cinematic 9:16 vertical aesthetic scene wallpapers
@@ -18,6 +18,20 @@ const SCENE_ENHANCERS = [
   (p) => `Grand triumphant horizon at dawn, monumental mountain summit, soaring in infinite golden sky, ultimate nobility, victory and boundless freedom. ${p}`
 ];
 
+// Intelligent Uzbek/Central Asian gender detection for personalized visuals
+const detectGender = (name) => {
+  const lower = String(name || "").trim().toLowerCase();
+  // Female suffixes and common endings
+  if (/(oy|gul|noza|bonu|xon|begim|bika|niso|ora|poshsha|iya|zoda|zuhra|moh|dil|chechak|oyim|eva|ova|yulduz|mohira|malika|laylo|sevara|dildora)$/i.test(lower)) {
+    return "FEMALE";
+  }
+  // Male suffixes and common endings
+  if (/(bek|jon|dor|murod|shoh|mirzo|ali|boy|qul|iddin|ulloh|yor|zod|er|voy|ov|ev|polvon|botir|sarvar|sardor|sher|ar|al|ur|ir|temur|amir|islom|bobur|jasur|javohir)$/i.test(lower)) {
+    return "MALE";
+  }
+  return "UNISEX";
+};
+
 export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
@@ -25,9 +39,11 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const { prompts, topic } = req.body || {};
+    const { prompts, topic, gender } = req.body || {};
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
     const hasTopic = topic && String(topic).trim().length > 0;
+    const effectiveGender = (gender && gender !== 'UNISEX') ? gender : detectGender(topic);
+    const genderTone = toneFor(effectiveGender);
 
     // Pick 4 distinct styles from NAME_ART_CONCEPTS for maximum variety
     // (e.g. Royal Gold, Cosmic Nebula, Crystal Diamond, Glacial Ice, Emerald Botanical)
@@ -46,13 +62,17 @@ export default async function handler(req, res) {
       if (hasTopic) {
         const clean = String(topicName).trim().toUpperCase().slice(0, 20);
         const concept = frameConcepts[frameIndex % frameConcepts.length];
+        const sceneContext = promptText && String(promptText).trim().length > 10
+          ? `Thematic scene atmosphere inspired by the name's meaning: ${String(promptText).replace(/["']/g, "").trim()}.`
+          : "";
 
         return `Vertical 9:16 smartphone wallpaper key visual. Breathtaking personalized 3D typography artwork spelling the exact word "${clean}".
 ${concept.art}.
+${sceneContext}
 
 CRITICAL TYPOGRAPHY & SPELLING:
 - The entire word "${clean}" MUST be rendered on a SINGLE HORIZONTAL LINE from left to right.
-- Exact spelling: "${clean}" (${clean.length} Latin letters). All ${clean.length} letters must be sculpted side-by-side on ONE continuous horizontal baseline in magnificent 3D ${concept.typography}.
+- Exact spelling: "${clean}" (${clean.length} Latin letters). All ${clean.length} letters must be sculpted side-by-side on ONE continuous horizontal baseline in magnificent 3D ${concept.typography}, expressing ${genderTone}.
 - Positioned centered in the upper-middle area (between 35% and 55% vertical height) with elegant margins.
 - Keep the bottom 30% of the canvas clean with soft atmospheric background and ambient light so video subtitles can be displayed with 100% clarity.
 - Masterpiece, 8k resolution, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition luxury aesthetic. The ONLY text visible in the entire image is "${clean}".`;
@@ -71,7 +91,7 @@ CRITICAL TYPOGRAPHY & SPELLING:
       const enhanced = buildFramePrompt(p, topic, index);
 
       // Check cache first to avoid redundant API calls
-      const cacheKey = `frame_art:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
+      const cacheKey = `frame_art:${topic || 'gen'}:${effectiveGender}:${index}:${enhanced.slice(0, 80)}`;
       const cached = getCachedImage(cacheKey);
       if (cached) {
         console.log(`Using cached image for frame index ${index}`);
@@ -120,7 +140,7 @@ CRITICAL TYPOGRAPHY & SPELLING:
           const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
           if (pollinationsImg) {
             generated = pollinationsImg;
-            const cacheKey = `frame_art:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
+            const cacheKey = `frame_art:${topic || 'gen'}:${effectiveGender}:${index}:${enhanced.slice(0, 80)}`;
             setCachedImage(cacheKey, pollinationsImg);
           }
         } catch (pollErr) {
