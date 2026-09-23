@@ -131,7 +131,7 @@ export default async function handler(req, res) {
         return cached;
       }
 
-      // Execute with multi-region quota fallback
+      // Execute with multi-region quota fallback using ultra-fast gemini-3.1-flash-lite-image
       const response = await executeWithQuotaFallback(
         async (ai, loc, modelToUse) => {
           return await ai.models.generateContent({
@@ -140,7 +140,7 @@ export default async function handler(req, res) {
             config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
           });
         },
-        ["gemini-2.0-flash", "gemini-2.0-flash-exp"]
+        ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image", "gemini-2.5-flash-image"]
       );
 
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
@@ -180,8 +180,13 @@ export default async function handler(req, res) {
       return generated || HD_WALLPAPERS[index % HD_WALLPAPERS.length];
     };
 
-    // Generate all frames in parallel for lightning-fast response (< 5s)
-    const images = await Promise.all(validPrompts.map((p, idx) => processFrame(p, idx)));
+    // Generate all frames in parallel with gentle stagger (300ms) to prevent burst quota exhaustion
+    const images = await Promise.all(
+      validPrompts.map(async (p, idx) => {
+        if (idx > 0) await sleep(idx * 300);
+        return await processFrame(p, idx);
+      })
+    );
 
     return res.status(200).json({ images });
   } catch (err) {

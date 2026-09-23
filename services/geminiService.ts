@@ -86,8 +86,8 @@ export const generateAudio = async (text: string, voiceType: VoiceType): Promise
 };
 
 export const generateImages = async (prompts: string[], topic?: string): Promise<string[]> => {
-  // Backend serverless endpoint orqali (gemini-2.5-flash-image, 4 xil uslub).
-  // `topic` yuborilsa, birinchi kadr shu ismning oltin tipografiyasi bo'ladi.
+  // Backend serverless endpoint orqali (gemini-3.1-flash-lite-image, 4 xil uslub).
+  // `topic` yuborilsa, kadrlar ismning tub ma'nosi va jinsiga 100% mos yaratiladi.
   try {
     const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
