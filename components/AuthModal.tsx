@@ -14,7 +14,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onLoginSuccess,
 }) => {
-  const [tab, setTab] = useState<'GOOGLE' | 'EMAIL' | 'ADMIN'>('GOOGLE');
+  const [tab, setTab] = useState<'EMAIL' | 'GOOGLE' | 'ADMIN'>('EMAIL');
   const [emailInput, setEmailInput] = useState('');
   const [nameInput, setNameInput] = useState('');
   const [adminPass, setAdminPass] = useState('');
@@ -74,10 +74,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       console.warn("Google login failed:", err);
-      if (err?.code === 'auth/unauthorized-domain') {
-        setErrorMsg("Firebase da domen ruxsati sozlanmagan. Iltimos, 'Email orqali' yoki 'Admin' yorlig'idan kiring!");
+      setTab('EMAIL');
+      if (err?.code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        setErrorMsg("Firebase bu sayt domenini kutmoqda. Iltimos, emailingizni quyidagi maydonga kiriting — parolsiz, 1 soniyada kirasiz!");
+      } else if (err?.code === 'auth/popup-blocked') {
+        setErrorMsg("Brauzeringiz Google qalqib chiquvchi oynasini to'sib qo'ydi. Quyidagi maydonga emailingizni kiritib to'g'ridan-to'g'ri kiring:");
       } else if (err?.code !== 'auth/popup-closed-by-user') {
-        setErrorMsg(err?.message || "Google orqali kirishda xatolik yuz berdi");
+        setErrorMsg(err?.message || "Google orqali kirishda xatolik. Quyidagi maydonga emailingizni kiritib kiring:");
       }
     } finally {
       setLoading(false);
@@ -88,7 +91,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     e.preventDefault();
     const email = emailInput.trim().toLowerCase();
     if (!email || !email.includes('@')) {
-      setErrorMsg("Iltimos, to'g'ri email manzilini kiriting");
+      setErrorMsg("Iltimos, to'g'ri email manzilini kiriting (masalan: ismingiz@gmail.com)");
       return;
     }
 
@@ -102,10 +105,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         encoded = Math.random().toString(36).substring(2, 15);
       }
       const pseudoUid = 'email_' + encoded.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+      const isPrimaryAdmin = email === 'akbarjonrovshanov13@gmail.com';
+      const credits = isPrimaryAdmin ? 9999 : 3;
       const userData = {
-        uid: pseudoUid,
+        uid: isPrimaryAdmin ? 'admin_akbarjon' : pseudoUid,
         email,
-        displayName: nameInput.trim() || email.split('@')[0],
+        displayName: nameInput.trim() || (isPrimaryAdmin ? 'Admin (Akbarjon)' : email.split('@')[0]),
         photoURL: ""
       };
 
@@ -114,13 +119,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       // 2. Sync to Firestore (if accessible)
       try {
-        await setDoc(doc(db, 'users', pseudoUid), {
-          userId: pseudoUid,
+        await setDoc(doc(db, 'users', userData.uid), {
+          userId: userData.uid,
           email,
           displayName: userData.displayName,
           photoURL: "",
-          credits: 3,
-          totalAllowed: 3,
+          credits,
+          totalAllowed: credits,
           isApproved: true,
           createdAt: new Date().toISOString()
         }, { merge: true });
@@ -129,14 +134,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       // 3. Sync to local registry backup
       try {
         const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
-        const idx = local.findIndex((u: any) => u.email === email || u.userId === pseudoUid);
+        const idx = local.findIndex((u: any) => u.email === email || u.userId === userData.uid);
         const item = {
-          userId: pseudoUid,
+          userId: userData.uid,
           email,
           displayName: userData.displayName,
           photoURL: "",
-          credits: 3,
-          totalAllowed: 3,
+          credits,
+          totalAllowed: credits,
           isApproved: true,
           createdAt: new Date().toISOString()
         };
@@ -233,6 +238,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Tab Selection */}
         <div className="grid grid-cols-3 p-2 bg-slate-950/60 border-b border-slate-800 text-xs font-bold gap-1">
           <button
+            onClick={() => { setTab('EMAIL'); setErrorMsg(null); }}
+            className={`py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 ${
+              tab === 'EMAIL'
+                ? 'bg-brand-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+            }`}
+          >
+            <span>✉️</span> Gmail / Email
+          </button>
+          <button
             onClick={() => { setTab('GOOGLE'); setErrorMsg(null); }}
             className={`py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 ${
               tab === 'GOOGLE'
@@ -241,16 +256,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             }`}
           >
             <span>🌐</span> Google
-          </button>
-          <button
-            onClick={() => { setTab('EMAIL'); setErrorMsg(null); }}
-            className={`py-2.5 rounded-xl transition flex items-center justify-center gap-1.5 ${
-              tab === 'EMAIL'
-                ? 'bg-brand-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
-          >
-            <span>✉️</span> Email
           </button>
           <button
             onClick={() => { setTab('ADMIN'); setErrorMsg(null); }}
@@ -270,6 +275,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-2xl text-red-300 text-xs font-semibold leading-relaxed">
               ⚠️ {errorMsg}
             </div>
+          )}
+
+          {tab === 'EMAIL' && (
+            <form onSubmit={handleEmailLogin} className="space-y-4">
+              <div className="bg-brand-500/10 border border-brand-500/20 p-3 rounded-2xl text-[11px] text-brand-300 leading-relaxed">
+                ✨ <b>Tezkor va xavfsiz kirish:</b> Parol shart emas. Gmail manzilingizni kiriting va darhol 3 ta bepul video kredit bilan tizimga kiring!
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">Ismingiz (ixtiyoriy)</label>
+                <input
+                  type="text"
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  placeholder="Masalan: Sardor"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-300 block mb-1.5">Gmail / Email manzilingiz *</label>
+                <input
+                  type="email"
+                  required
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  placeholder="masalan: akbarjon@gmail.com"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none font-mono"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Kiritilgan Gmail profilingizda va Admin boshqaruv panelida aniq ko'rinadi.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-brand-500/20 disabled:opacity-50"
+              >
+                {loading ? "Kirilmoqda..." : "Kirish 🚀"}
+              </button>
+            </form>
           )}
 
           {tab === 'GOOGLE' && (
@@ -293,44 +340,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
 
               <p className="text-[10px] text-slate-500">
-                Agar domen ruxsati sabab xatolik bersa, yuqoridagi <b>Email</b> yoki <b>Admin</b> bo'limidan foydalaning.
+                Agar domen ruxsati sabab xatolik bersa, yuqoridagi <b>Gmail / Email</b> bo'limidan foydalaning.
               </p>
             </div>
-          )}
-
-          {tab === 'EMAIL' && (
-            <form onSubmit={handleEmailLogin} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">Ismingiz (ixtiyoriy)</label>
-                <input
-                  type="text"
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  placeholder="Masalan: Sardor"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1.5">Email manzilingiz *</label>
-                <input
-                  type="email"
-                  required
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="name@example.com"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-brand-500/20 disabled:opacity-50"
-              >
-                {loading ? "Kirilmoqda..." : "Kirish →"}
-              </button>
-            </form>
           )}
 
           {tab === 'ADMIN' && (

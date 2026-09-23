@@ -135,6 +135,20 @@ const App: React.FC = () => {
     // 2. Listen to Firebase auth
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        // If localStorage already holds a logged-in user with a real email, don't let an anonymous Firebase session overwrite it!
+        const saved = localStorage.getItem('ismlar_auth_user');
+        let savedParsed: any = null;
+        if (saved) {
+          try {
+            savedParsed = JSON.parse(saved);
+          } catch {}
+        }
+        if (savedParsed?.email && savedParsed.email.includes('@') && !savedParsed.email.includes('@user.ismlar.ai')) {
+          if (!currentUser.email || currentUser.isAnonymous) {
+            return;
+          }
+        }
+
         // Resolve real email from currentUser, providerData, or Firestore
         const providerData = currentUser.providerData || [];
         const providerWithEmail = providerData.find((p: any) => p && p.email && p.email.includes('@'));
@@ -157,7 +171,7 @@ const App: React.FC = () => {
         }
 
         const safeEmail = realEmail || `${currentUser.uid}@user.ismlar.ai`;
-        const safeName = realName || 'Foydalanuvchi';
+        const safeName = realName || (realEmail ? realEmail.split('@')[0] : 'Foydalanuvchi');
         const userObj = {
           uid: currentUser.uid,
           email: safeEmail,
@@ -165,7 +179,7 @@ const App: React.FC = () => {
           photoURL: realPhoto
         };
 
-        setUser(currentUser);
+        setUser(userObj);
         localStorage.setItem('ismlar_auth_user', JSON.stringify(userObj));
 
         // Save to local registry backup

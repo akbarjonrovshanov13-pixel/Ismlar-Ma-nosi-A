@@ -144,6 +144,19 @@ export const updateUserDetailsInPostgres = async (
   }
 };
 
+// 4.2. Admin orqali foydalanuvchini PostgreSQL'dan o'chirish
+export const deleteUserFromPostgres = async (uid: string): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_BASE}/db-users.js?uid=${encodeURIComponent(uid)}`, {
+      method: "DELETE",
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("PostgreSQL: Foydalanuvchini o'chirish xatosi:", err);
+    return false;
+  }
+};
+
 export interface PostgresAdminUsersResponse {
   users: UserProfileDocument[];
   dbConnected: boolean;

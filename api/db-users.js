@@ -211,6 +211,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Noto'g'ri patch amali" });
     }
 
+    // 4. DELETE: Admin delete user
+    if (req.method === "DELETE") {
+      const { uid } = req.query || req.body || {};
+      if (!uid) {
+        return res.status(400).json({ error: "uid maydoni kiritilishi shart" });
+      }
+
+      await query(`DELETE FROM users WHERE uid = $1`, [uid]);
+      return res.status(200).json({ success: true, message: "Foydalanuvchi o'chirildi" });
+    }
+
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
     console.error("api/db-users xatosi:", err);

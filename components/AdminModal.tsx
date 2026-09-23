@@ -15,7 +15,8 @@ import {
   adminRejectPaymentInPostgres,
   updateUserCreditsInPostgres,
   updateUserDetailsInPostgres,
-  syncUserWithPostgres
+  syncUserWithPostgres,
+  deleteUserFromPostgres
 } from '../lib/postgresService';
 
 interface AdminModalProps {
@@ -373,6 +374,28 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
+  const handleDeleteUser = async (userId: string, email?: string) => {
+    const label = email && !email.includes('@user.ismlar.ai') ? email : userId;
+    if (!window.confirm(`Haqiqatan ham bu foydalanuvchini (${label}) bazadan butunlay o'chirmoqchimisiz?`)) {
+      return;
+    }
+    try {
+      await deleteUserFromPostgres(userId);
+      // Also remove from local storage registry
+      try {
+        const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        const filtered = local.filter((u: any) => u.userId !== userId && (!email || u.email !== email));
+        localStorage.setItem('ismlar_local_users', JSON.stringify(filtered));
+      } catch {}
+
+      alert("Foydalanuvchi muvaffaqiyatli o'chirildi!");
+      loadAdminData();
+      if (onRefreshUserProfile) onRefreshUserProfile();
+    } catch (err: any) {
+      alert("O'chirishda xatolik: " + err.message);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -673,6 +696,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               title="Foydalanuvchi ma'lumotlarini tahrirlash"
                             >
                               ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteUser(u.userId, u.email)}
+                              className="w-8 h-8 rounded-xl bg-red-950/40 hover:bg-red-900/60 border border-red-500/30 text-red-400 hover:text-red-200 transition flex items-center justify-center text-xs"
+                              title="Foydalanuvchini bazadan o'chirish"
+                            >
+                              🗑️
                             </button>
                           </div>
                         </div>
