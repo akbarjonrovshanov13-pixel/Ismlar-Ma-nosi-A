@@ -12,10 +12,10 @@ const HD_WALLPAPERS = [
 
 // Fallback thematic archetypes if no name is provided:
 const SCENE_ENHANCERS = [
-  (p) => `Majestic epic vista, grand sunrise with golden morning rays breaking through misty clouds, royal palace or mountain silhouette, soaring eagle, timeless strength. ${p}`,
+  (p) => `Majestic royal architectural vista, grand sunrise with golden morning rays breaking through misty clouds, opulent palace archways, soaring eagle, timeless strength. ${p}`,
   (p) => `Mysterious celestial twilight, tranquil reflective water, glowing starlight particles and deep indigo ethereal atmosphere capturing inner wisdom. ${p}`,
   (p) => `Warm golden hour glow, delicate warm embers floating in serene breeze, lush botanical realism, radiant sunlight, pure emotional beauty. ${p}`,
-  (p) => `Grand triumphant horizon at dawn, monumental mountain summit, soaring in infinite golden sky, ultimate nobility, victory and boundless freedom. ${p}`
+  (p) => `Grand triumphant horizon at dawn, infinite golden sky, radiant dawn rays, ultimate nobility, victory and boundless freedom. ${p}`
 ];
 
 // Intelligent Uzbek/Central Asian gender detection for personalized visuals

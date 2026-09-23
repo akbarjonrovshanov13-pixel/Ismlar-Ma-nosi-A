@@ -29,17 +29,27 @@ MUHIM: "script_segments" videodagi subtitr matni. full_script esa aynan shu segm
 tashkil topadi — ikkalasi bir xil matn bo'lishi kerak, faqat biri bo'lingan, biri yaxlit.
 
 IMAGE_PROMPTS_EN UCHUN QAT'IY TALABLAR (Videodagi 4 ta asosiy bosqich uchun 4 ta kinematografik sahna):
-Har bir prompt aynan shu ISMNING ASL TUB MA'NOSI (masalan: jasurlik/mardlik, nafosat/go'zallik, donolik/ilm, nur/quyosh, dengiz/ummon, qudrat va h.k.) hamda jinsiga (erkak/ayol) 100% MOS KELADIGAN kinematografik, go'zal sahna bo'lishi shart!
+Har bir prompt aynan shu ISMNING ASL TUB MA'NOSI va ETIMOLOGIYASIGA 100% MOS KELADIGAN, xilma-xil va betakror sahna bo'lishi shart!
+QAT'IY TALAB: Hamma ismga bir xil "tog' cho'qqisi" yoki "tog'lar" deb yozish QAT'IYAN TAQIQLANADI! Ism nimani anglatsa, aynan o'sha mavzudagi ramziy sahna bo'lsin:
 
-1-prompt: Ismning tub ma'nosi, aslzodaligi va ruhi (masalan: mahobatli tog' cho'qqisidagi oltin qanotli burgut, zumrad vodiydagi ulug'vor arslon, moviy ummondagi sokin kema yoki billur qasr — sof ramziy sahna, no text).
-2-prompt: Ism egasining yashirin ichki olami va fe'l-atvori (masalan: sirli sokin ko'l, yulduzli cheksiz koinot, qadimiy muhtasham ziyo maskani, teran sokin atmosfera — sof manzara, no text).
-3-prompt: Qalb kuchi, samimiyat va tuyg'ular (masalan: oltin quyosh nurlari, iliq mayin shafaq, tog'lar ortidagi yorug'lik zarrachalari, sokin yorug'lik — sof manzara, no text).
-4-prompt: Buyuk kelajak, g'alaba va yuksaklik (masalan: tonggi ufqda mahobatli tog' cho'qqisi, erkin cheksiz osmon, g'alabali yuksak panorama — sof manzara, no text).
+- Agar ism gullar, tabiat yoki bahor bilan bog'liq bo'lsa (Rayhon, Gulnoza, Lola, Bahora, Sevara...) -> Gullagan sokin bog'lar, tonggi shudring, mayin shafaq, sakura va gul barglari, nafis zumrad tabiat.
+- Agar ism qimmatbaho toshlar, javohirlar bilan bog'liq bo'lsa (Javohir, Gavhar, Feruza, Zumrad, Durdona...) -> Qimmatbaho olmos qirralari, feruza va zumrad jilolari, billur prizma nurlari, zargarlik nafosati.
+- Agar ism samoviy, yorug'lik, nur bilan bog'liq bo'lsa (Yulduz, Shams, Nuriddin, Oybek, Ziyoda...) -> Cheksiz yulduzli galaktika, to'lin oy yog'dusi, quyosh nurlari, oltin nur zarrachalari.
+- Agar ism shohona, hukmdorlik, yetakchilik bilan bog'liq bo'lsa (Shahzod, Sulton, Amir, Malik, Bekzod...) -> Muhtasham qasr zallari, marmar saroylar, oltin koshinlar, qirollik hashamati.
+- Agar ism daryo, dengiz, suv bilan bog'liq bo'lsa (Dengiz, Ummon, Nilufar, Daryo...) -> Moviy toza ummon, sokin suv yuzidagi nurlar, shaffof sharshara.
+- Agar ism ilm, donolik, tafakkur bilan bog'liq bo'lsa (Doniyor, Hakim, Olim, Zakiya...) -> Qadimiy muhtasham kutubxona, sham yorug'i, qadimiy xaritalar, donolik maskani.
+- Agar ism qudrat, mardlik bilan bog'liq bo'lsa (Sherzod, Rustam, Temur, Polvon...) -> Mahobatli qadimiy qal'a, qudratli ramziy haykaltaroshlik, olov va po'lat qudrati.
+
+4 BOSQICH TUZILISHI:
+1-prompt: Ismning tub ma'nosi va asl ramzi (yuqoridagi mavzusiga mos betakror kompozitsiya, no text).
+2-prompt: Ichki ruhiyat va xarakter (sirli, sokin va chuqur muhit, no text).
+3-prompt: Tuyg'ular, qalb jilosi va mehr (iliq yorug'lik, zarrachalar, nafislik, no text).
+4-prompt: Yuksak orzular, muvaffaqiyat va yorqin istiqbol (keng ufq, erkin osmon, zafarli porloq muhit, no text).
 
 QAT'IY QOIDALAR:
 1. BARCHA 4 ta kadrda hech qanday yozuv, harf yoki so'z bo'lmasin (NO text, NO letters, NO words), toki videodagi animatsiyali ism va subtitrlar tiniq, chiroyli ko'rinsin.
 2. Diniy ramzlar va sig'inish belgilaridan foydalanmang.
-3. Odam yuzini yaqindan ko'rsatmang (faqat siluet, orqa tomondan yoki ulug'vor manzara).
+3. Odam yuzini yaqindan ko'rsatmang (faqat siluet, orqa tomondan yoki ramziy manzara).
 4. Har bir prompt ingliz tilida, o'ta ta'sirli va sifatli bo'lsin (taxminan 15-25 so'z).
 `;
 
