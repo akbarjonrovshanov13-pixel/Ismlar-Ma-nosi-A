@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import { ScriptSegment, CaptionStyle, WatermarkPosition } from '../types';
+import { ScriptSegment, CaptionStyle, WatermarkPosition, VoiceSpeed } from '../types';
 
 interface VideoPlayerProps {
   images: string[];
@@ -17,6 +17,8 @@ interface VideoPlayerProps {
   adTitle?: string;
   adSubtitle?: string;
   adHandle?: string;
+  voiceSpeed?: VoiceSpeed;
+  onVoiceSpeedChange?: (speed: VoiceSpeed) => void;
 }
 
 interface WordTiming {
@@ -114,10 +116,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   watermarkPosition = WatermarkPosition.TOP_RIGHT,
   adTitle = "LUXE CORE",
   adSubtitle = "Qutilar • Paketlar • Qadoqlash • HoReCa",
-  adHandle = "@luxe_core_uz"
+  adHandle = "@luxe_core_uz",
+  voiceSpeed = 1.1,
+  onVoiceSpeedChange
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSpeed, setCurrentSpeed] = useState<VoiceSpeed>(voiceSpeed || 1.1);
+
+  // Sync if voiceSpeed prop updates from parent
+  useEffect(() => {
+    if (voiceSpeed) {
+      setCurrentSpeed(voiceSpeed);
+    }
+  }, [voiceSpeed]);
   
   // We use a Ref for tracking play time to avoid re-renders during the loop
   const currentTimeRef = useRef(0);
@@ -612,12 +624,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return Math.min(Math.max(outroChars / OUTRO_CHARS_PER_SECOND, 2), duration * 0.4);
   }, [duration, outroText]);
 
-  // 3. Subtitle Calculation (Same logic)
+  // 3. Subtitle Calculation (scaled by currentSpeed)
   const preparedSubtitles = useMemo<PreparedSubtitle[]>(() => {
     if (!scriptSegments.length || duration === 0) return [];
 
+    const effectiveDuration = duration / currentSpeed;
+    const effectiveOutroDuration = outroDuration / currentSpeed;
+
     // Subtitles cover everything up to the point the outro line starts being spoken.
-    const nameDuration = Math.max(1, duration - outroDuration);
+    const nameDuration = Math.max(1, effectiveDuration - effectiveOutroDuration);
     const totalCharsInScript = scriptSegments.reduce((acc, seg) => acc + seg.length, 0);
     let globalElapsed = 0;
 
@@ -646,16 +661,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const last = [...realTimes].reverse().find(Boolean);
         const wordTimingsForSegment: WordTiming[] = rawWords.map((word, i) => {
           const t = realTimes[i];
+          const rawStart = t ? t.start : (first ? first.start : 0);
+          const rawEnd = t ? t.end : (last ? last.end : 0);
           return {
             word,
-            start: t ? t.start : (first ? first.start : 0),
-            end: t ? t.end : (last ? last.end : 0),
+            start: rawStart / currentSpeed,
+            end: rawEnd / currentSpeed,
             width: ctx.measureText(word).width,
           };
         });
         return {
-          start: first ? first.start : 0,
-          end: last ? last.end : 0,
+          start: (first ? first.start : 0) / currentSpeed,
+          end: (last ? last.end : 0) / currentSpeed,
           lines: buildLines(wordTimingsForSegment, maxWidth),
         };
       }
@@ -682,7 +699,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       return { start: segmentStart, end: segmentEnd, lines: buildLines(wordTimings, maxWidth) };
     });
-  }, [scriptSegments, duration, outroDuration, wordTimings]);
+  }, [scriptSegments, duration, outroDuration, wordTimings, currentSpeed]);
 
 
   const drawLayer = useCallback((ctx: CanvasRenderingContext2D, layer: ProcessedImageLayer, progress: number, opacity: number) => {
@@ -719,20 +736,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
+    const effectiveDuration = duration > 0 ? duration / currentSpeed : 0;
+    const effectiveOutroDuration = outroDuration / currentSpeed;
+
     // --- Luxe Core Outro Check (starts when the closing line starts being spoken) ---
-    const isOutro = duration > outroDuration && time >= (duration - outroDuration);
+    const isOutro = effectiveDuration > effectiveOutroDuration && time >= (effectiveDuration - effectiveOutroDuration);
 
     if (isOutro) {
-        const outroTime = time - (duration - outroDuration); // ranges from 0 to outroDuration
+        const outroTime = time - (effectiveDuration - effectiveOutroDuration); // ranges from 0 to effectiveOutroDuration
+        const productDuration = Math.min(5.0 / currentSpeed, effectiveOutroDuration * 0.55);
         
-        if (outroTime < 5.0) {
+        if (outroTime < productDuration) {
             // "Avval quti, paket, lenta va bir martalik idishlardan tez kadrlar ko‘rinsin"
             // Show product advert frames for 5.0 seconds (3 seconds longer so viewers can clearly see products)
             const activeImages = outroImagesRef.current.filter(img => img && img.complete);
             const imgCount = activeImages.length;
             
             if (imgCount > 0) {
-                const frameDuration = 5.0 / imgCount;
+                const frameDuration = productDuration / imgCount;
                 const frameIndex = Math.floor(outroTime / frameDuration) % imgCount;
                 const img = activeImages[frameIndex];
                 
@@ -803,8 +824,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             });
             ctx.globalAlpha = 1;
             
-            // Outro logo transition (starts at 5.0s, smooth 1.5s entrance transition)
-            const sceneProgress = Math.min(1.0, (outroTime - 5.0) / 1.5); // Slower, smoother 1.5s entrance
+            // Outro logo transition (starts after product frames, smooth entrance transition)
+            const entranceDuration = Math.min(1.5 / currentSpeed, (effectiveOutroDuration - productDuration) * 0.4);
+            const sceneProgress = Math.min(1.0, Math.max(0, (outroTime - productDuration) / Math.max(0.1, entranceDuration)));
             const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
             const animatedProgress = easeOut(sceneProgress);
             
@@ -936,8 +958,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     // --- Normal Slides Presentation ---
     const totalImages = processedLayers.length;
-    const nameDuration = duration > outroDuration ? duration - outroDuration : (duration > 0 ? duration : 5);
+    const nameDuration = effectiveDuration > effectiveOutroDuration ? effectiveDuration - effectiveOutroDuration : (effectiveDuration > 0 ? effectiveDuration : 5);
     const slotDuration = nameDuration / totalImages;
+    const effectiveFade = Math.min(FADE_DURATION / currentSpeed, slotDuration * 0.35);
     
     let currentIndex = Math.floor(time / slotDuration);
     if (currentIndex >= totalImages) currentIndex = totalImages - 1;
@@ -949,9 +972,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     drawLayer(ctx, processedLayers[currentIndex], progress, 1);
 
-    if (timeInSlot > (slotDuration - FADE_DURATION) && nextIndex !== currentIndex) {
-       const fadeTime = timeInSlot - (slotDuration - FADE_DURATION);
-       const fadeProgress = fadeTime / FADE_DURATION;
+    if (timeInSlot > (slotDuration - effectiveFade) && nextIndex !== currentIndex) {
+       const fadeTime = timeInSlot - (slotDuration - effectiveFade);
+       const fadeProgress = fadeTime / effectiveFade;
        
        const transType = processedLayers[nextIndex].transitionType;
        
@@ -1434,10 +1457,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         ctx.restore();
     }
 
-  }, [processedLayers, duration, preparedSubtitles, drawLayer, outroDuration]);
+  }, [processedLayers, duration, preparedSubtitles, drawLayer, outroDuration, currentSpeed]);
 
-  const startAudioSources = (offset: number) => {
+  const startAudioSources = (offset: number, speedOverride?: VoiceSpeed) => {
     if (!audioContext || !audioBuffer) return;
+    const speed = speedOverride || currentSpeed;
 
     if (speechSourceRef.current) {
       try { speechSourceRef.current.stop(); } catch {}
@@ -1453,8 +1477,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // 1. Speech Audio
     const speechSource = audioContext.createBufferSource();
     speechSource.buffer = audioBuffer;
+    speechSource.playbackRate.value = speed;
     speechSource.connect(audioContext.destination);
-    speechSource.start(0, offset);
+    const bufferOffset = Math.min(Math.max(0, audioBuffer.duration - 0.05), Math.max(0, offset * speed));
+    speechSource.start(0, bufferOffset);
     speechSourceRef.current = speechSource;
 
     // 2. Background Music (if enabled)
@@ -1488,14 +1514,42 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     stopPreviewBgm();
   };
 
+  // Speed Switcher with Smooth Timeline Translation
+  const handleSpeedSelect = (newSpeed: VoiceSpeed) => {
+    if (newSpeed === currentSpeed) return;
+    const wasPlaying = isPlaying;
+    if (isPlaying) {
+      stopAudioSources();
+      setIsPlaying(false);
+    }
+    const currentVideoTime = currentTimeRef.current;
+    // Map current video time to buffer time, then to new speed video time
+    const bufferTime = currentVideoTime * currentSpeed;
+    const newVideoTime = bufferTime / newSpeed;
+    currentTimeRef.current = newVideoTime;
+
+    setCurrentSpeed(newSpeed);
+    onVoiceSpeedChange?.(newSpeed);
+
+    if (wasPlaying && audioContext) {
+      setTimeout(() => {
+        startAudioSources(newVideoTime, newSpeed);
+        setIsPlaying(true);
+      }, 50);
+    } else {
+      setTimeout(() => draw(newVideoTime), 0);
+    }
+  };
+
   // 5. Animation Loop (Playback)
   const animate = useCallback(() => {
     if (!isPlaying || !audioContext) return;
     
     const now = audioContext.currentTime;
     const time = now - startTime;
+    const effectiveDuration = duration > 0 ? duration / currentSpeed : 0;
     
-    if (time >= duration + 0.2) { 
+    if (time >= effectiveDuration + 0.15) { 
       setIsPlaying(false);
       currentTimeRef.current = 0;
       stopAudioSources();
@@ -1516,7 +1570,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     draw(time);
     reqRef.current = requestAnimationFrame(animate);
-  }, [isPlaying, audioContext, startTime, duration, draw, preparedSubtitles, isBgmEnabled, bgmVolume]);
+  }, [isPlaying, audioContext, startTime, duration, currentSpeed, draw, preparedSubtitles, isBgmEnabled, bgmVolume]);
 
   useEffect(() => {
     reqRef.current = requestAnimationFrame(animate);
@@ -1578,6 +1632,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       // 1. Speech Audio
       const speechSource = recCtx.createBufferSource();
       speechSource.buffer = audioBuffer;
+      speechSource.playbackRate.value = currentSpeed;
       speechSource.connect(dest);
       speechSource.start(0);
 
@@ -1661,7 +1716,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           const now = performance.now();
           const elapsed = (now - recStartTime) / 1000;
 
-          if (elapsed >= duration) {
+          const effectiveDuration = duration > 0 ? duration / currentSpeed : duration;
+
+          if (elapsed >= effectiveDuration) {
                finished = true;
                stopTicker();
                setDownloadProgress(100);
@@ -1672,7 +1729,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           draw(elapsed);
 
           if (now - lastProgressUpdate > 80) {
-              const pct = Math.min(99, Math.round((elapsed / Math.max(1, duration)) * 100));
+              const pct = Math.min(99, Math.round((elapsed / Math.max(1, effectiveDuration)) * 100));
               setDownloadProgress(pct);
               lastProgressUpdate = now;
           }
@@ -1724,6 +1781,55 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       </div>
       
+      {/* ⚡ Ovoz Tezligi (Speed Control) */}
+      <div className="mt-3 w-full max-w-[340px] bg-slate-900/90 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-800 shadow-xl flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm">⚡</span>
+          <span className="text-[11px] font-bold text-slate-200">Sur'at:</span>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+          <button
+            type="button"
+            onClick={() => handleSpeedSelect(1.0)}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
+              currentSpeed === 1.0
+                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+            }`}
+            title="Oddiy sur'at (1.0x)"
+          >
+            <span>1.0x</span>
+            <span className="text-[9px] opacity-80 font-normal">Oddiy</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSpeedSelect(1.1)}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
+              currentSpeed === 1.1
+                ? 'bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+            }`}
+            title="Reels & TikTok uchun tavsiya etiladi (1.1x)"
+          >
+            <span>⭐ 1.1x</span>
+            <span className="text-[9px] font-extrabold">Chaqqon</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSpeedSelect(1.15)}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 ${
+              currentSpeed === 1.15
+                ? 'bg-gradient-to-r from-rose-500 to-amber-500 text-white font-black shadow-md shadow-rose-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+            }`}
+            title="Yuqori dinamika va tomoshabinni ushlab qolish (1.15x)"
+          >
+            <span>🔥 1.15x</span>
+            <span className="text-[9px] font-extrabold">Shiddatli</span>
+          </button>
+        </div>
+      </div>
+
       {/* Fon Musiqasi Control Box */}
       <div className="mt-4 w-full max-w-[340px] bg-slate-900/90 backdrop-blur-md p-4 rounded-2xl border border-slate-800 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">

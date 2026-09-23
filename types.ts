@@ -48,6 +48,8 @@ export enum VoiceType {
   PROFESSIONAL = 'Professional' // Aoede
 }
 
+export type VoiceSpeed = 1.0 | 1.1 | 1.15;
+
 export interface ScriptSegment {
   text: string;
   duration?: number; // Calculated roughly or via audio timing

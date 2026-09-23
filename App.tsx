@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { AppState, ImageMode, VideoData, VoiceType, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
+import { AppState, ImageMode, VideoData, VoiceType, VoiceSpeed, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
 import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt, alignSubtitles, AlignedWord } from './services/geminiService';
 import { CATEGORIZED_TOPICS, TOPIC_CATEGORIES } from './constants';
 import { buildExternalImagePrompt } from './nameArtConcepts';
@@ -43,6 +43,7 @@ const App: React.FC = () => {
   const [imageMode, setImageMode] = useState<ImageMode>(ImageMode.GENERATE);
   const [useSearch, setUseSearch] = useState(true);
   const [voice, setVoice] = useState<VoiceType>(VoiceType.FRIENDLY);
+  const [voiceSpeed, setVoiceSpeed] = useState<VoiceSpeed>(1.1);
   const [hookStyle, setHookStyle] = useState<HookStyle>(HookStyle.RANDOM);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>(CaptionStyle.TIKTOK_YELLOW);
   const [userImages, setUserImages] = useState<string[]>([]);
@@ -739,6 +740,67 @@ const App: React.FC = () => {
               </div>
             </div>
 
+            {/* ⚡ Ovoz Tezligi (Reels/TikTok Retention) */}
+            <div className="space-y-2 pt-2 border-t border-slate-800">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">
+                  ⚡ Ovoz Tezligi (Reels / TikTok Retention)
+                </label>
+                <span className="text-[9px] text-brand-300 font-bold">
+                  {voiceSpeed === 1.0 ? 'Oddiy (1.0x)' : voiceSpeed === 1.1 ? 'Chaqqon (1.1x) ⭐' : 'Shiddatli (1.15x) 🔥'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setVoiceSpeed(1.0)}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    voiceSpeed === 1.0
+                      ? 'bg-brand-500/20 border-brand-500 text-brand-200'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-bold flex items-center gap-1">
+                    <span>🟢 1.0x</span>
+                    <span>Oddiy</span>
+                  </span>
+                  <span className="text-[9px] text-slate-500">Tinch va xotirjam</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVoiceSpeed(1.1)}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    voiceSpeed === 1.1
+                      ? 'bg-amber-500/20 border-amber-500 text-amber-200 ring-1 ring-amber-500/50'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-black flex items-center gap-1 text-amber-300">
+                    <span>⭐ 1.1x</span>
+                    <span>Chaqqon</span>
+                  </span>
+                  <span className="text-[9px] text-amber-400/80">Reels uchun tavsiya</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setVoiceSpeed(1.15)}
+                  className={`p-2.5 rounded-xl border text-left transition flex flex-col gap-0.5 ${
+                    voiceSpeed === 1.15
+                      ? 'bg-rose-500/20 border-rose-500 text-rose-200 ring-1 ring-rose-500/50'
+                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
+                  }`}
+                >
+                  <span className="text-xs font-black flex items-center gap-1 text-rose-400">
+                    <span>🔥 1.15x</span>
+                    <span>Shiddatli</span>
+                  </span>
+                  <span className="text-[9px] text-slate-500">Maksimal retention</span>
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-2 pt-2 border-t border-slate-800">
               <label className="text-[10px] font-bold text-brand-400 uppercase tracking-wider block">Viral Hook Uslubi (Kirish qismi)</label>
               <select 
@@ -1184,21 +1246,23 @@ const App: React.FC = () => {
              })()
            ) : state.videoData ? (
              <div className="flex flex-col lg:grid lg:grid-cols-2 gap-5 sm:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <VideoPlayer 
-                  images={state.videoData.imageUrls} 
-                  audioBase64={state.videoData.audioBase64 || ""} 
-                  scriptSegments={state.videoData.script} 
-                  topic={state.videoData.topic} 
-                  customOutroImages={adConfig.customOutroImages}
-                  outroText={draftOutroText}
-                  wordTimings={subtitleTimings}
-                  captionStyle={captionStyle}
-                  watermarkText={adConfig.watermarkText}
-                  watermarkPosition={adConfig.watermarkPosition}
-                  adTitle={adConfig.adTitle}
-                  adSubtitle={adConfig.adSubtitle}
-                  adHandle={adConfig.adHandle}
-                />
+                 <VideoPlayer 
+                   images={state.videoData.imageUrls} 
+                   audioBase64={state.videoData.audioBase64 || ""} 
+                   scriptSegments={state.videoData.script} 
+                   topic={state.videoData.topic} 
+                   customOutroImages={adConfig.customOutroImages}
+                   outroText={draftOutroText}
+                   wordTimings={subtitleTimings}
+                   captionStyle={captionStyle}
+                   watermarkText={adConfig.watermarkText}
+                   watermarkPosition={adConfig.watermarkPosition}
+                   adTitle={adConfig.adTitle}
+                   adSubtitle={adConfig.adSubtitle}
+                   adHandle={adConfig.adHandle}
+                   voiceSpeed={voiceSpeed}
+                   onVoiceSpeedChange={setVoiceSpeed}
+                 />
                 <div className="space-y-4 sm:space-y-6">
                     <div className="bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-800 space-y-3 sm:space-y-4">
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
