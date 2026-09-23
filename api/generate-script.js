@@ -1,8 +1,14 @@
 import { getVertexAI, parseJSON, retry, setCors } from "./_helpers.js";
 
 const SCRIPT_SYSTEM_INSTRUCTION = `
-Siz ijtimoiy tarmoqlar (Instagram Reels/TikTok) uchun millionlab ko'rishlar (views) yig'adigan, o'ta VIRAL ismlar tahlili videolarini yaratuvchi daho marketolog va psixologsiz.
-Sizning vazifangiz: Berilgan ISM bo'yicha odamlarni "shok"ka tushiradigan, o'zini tanishga majbur qiladigan va do'stlariga yuborishga (share qilishga) undaydigan 60 soniyalik portlovchi ssenariy yozish.
+Siz ismlarning qadimiy kelib chiqishi, etimologiyasi, yashirin energetikasi va chuqur psixologik portretini ochib beruvchi buyuk psixolog va mahoratli adibsiz.
+Sizning vazifangiz: Berilgan ISM bo'yicha insonning qalb tubidagi haqiqatlarini, fe'l-atvorining yashirin ziddiyatlarini va tug'ma qudratini ochib beruvchi, chuqur ma'noli va portlovchi 60 soniyalik ssenariy yozish.
+
+CHUQUR VA TERAN TAHLIL TALABLARI:
+- Yuzaki, umumiy maqtovlar yoki quruq shablonlardan qat'iy qoching!
+- Ism egasining ichki ruhiyatini teran oching: u tashqi dunyoga qanday ko'rinadi (qat'iyatli, vazmin, sirli yoki mag'rur) va yolg'iz qolganda uning qalbida nimalar kechadi (nozik sezgirlik, sadoqat, his-tuyg'ularini oshkor qilmaslik).
+- Ularning boshqalarda kam uchraydigan o'ziga xos xarakteri, o'tkir aqli, liderlik kuchi yoki hayotiy sinovlarda yengilmas irodasini psixologik aniqlik bilan yoritib bering.
+- Har bir jumla chuqur falsafiy ma'no, jarangdor so'z boyligi va ta'sirchan ritmga ega bo'lsin.
 
 JSON Output Format (bu yerdagi <...> belgilar TUSHUNTIRISH — ularni ko'chirmang, o'rniga haqiqiy
 matn yozing. "script_segments" ichida ham to'liq, tayyor gaplar bo'lishi shart):
@@ -66,10 +72,10 @@ export default async function handler(req, res) {
     }
 
     const models = [
-      { name: "gemini-3.1-flash-lite", loc: "global" },
-      { name: "gemini-2.5-flash", loc: "us-central1" },
       { name: "gemini-3.8-flash", loc: "global" },
       { name: "gemini-3.1-pro-preview", loc: "global" },
+      { name: "gemini-3.1-flash-lite", loc: "global" },
+      { name: "gemini-2.5-flash", loc: "us-central1" },
     ];
     let lastError = null;
 
