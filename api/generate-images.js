@@ -1,4 +1,5 @@
 import { getVertexAI, executeWithQuotaFallback, fetchPollinationsImage, getCachedImage, setCachedImage, setCors } from "./_helpers.js";
+import { NAME_ART_CONCEPTS } from "../nameArtConcepts.js";
 
 // Same-origin fallback (used only if both Vertex AI and Pollinations AI fail) —
 // Cinematic 9:16 vertical aesthetic scene wallpapers
@@ -9,7 +10,7 @@ const HD_WALLPAPERS = [
   "/fallback/scene-4.jpg",
 ];
 
-// Fallback thematic archetypes if no descriptive prompt is provided:
+// Fallback thematic archetypes if no name is provided:
 const SCENE_ENHANCERS = [
   (p) => `Majestic epic vista, grand sunrise with golden morning rays breaking through misty clouds, royal palace or mountain silhouette, soaring eagle, timeless strength. ${p}`,
   (p) => `Mysterious celestial twilight, tranquil reflective water, glowing starlight particles and deep indigo ethereal atmosphere capturing inner wisdom. ${p}`,
@@ -28,6 +29,11 @@ export default async function handler(req, res) {
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
     const hasTopic = topic && String(topic).trim().length > 0;
 
+    // Pick 4 distinct styles from NAME_ART_CONCEPTS for maximum variety
+    // (e.g. Royal Gold, Cosmic Nebula, Crystal Diamond, Glacial Ice, Emerald Botanical)
+    const shuffledConcepts = [...NAME_ART_CONCEPTS].sort(() => 0.5 - Math.random());
+    const frameConcepts = [0, 1, 2, 3].map(i => shuffledConcepts[i % shuffledConcepts.length]);
+
     let aiAvailable = true;
     try {
       getVertexAI();
@@ -37,33 +43,49 @@ export default async function handler(req, res) {
     }
 
     const buildFramePrompt = (promptText, topicName, frameIndex) => {
-      const isDetailed = promptText && String(promptText).trim().length > 15 && String(promptText).trim().toLowerCase() !== String(topicName || "").toLowerCase();
+      if (hasTopic) {
+        const clean = String(topicName).trim().toUpperCase().slice(0, 20);
+        const concept = frameConcepts[frameIndex % frameConcepts.length];
 
-      let coreScene = "";
-      if (isDetailed) {
-        coreScene = String(promptText).replace(/["']/g, "").trim();
-      } else if (hasTopic) {
-        const cleanTopic = String(topicName).trim();
-        coreScene = SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](`Symbolizing the noble spirit and meaning of "${cleanTopic}".`);
-      } else {
-        coreScene = SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
+        return `Vertical 9:16 smartphone wallpaper key visual. Breathtaking personalized 3D typography artwork spelling the exact word "${clean}".
+${concept.art}.
+
+CRITICAL TYPOGRAPHY & SPELLING:
+- The entire word "${clean}" MUST be rendered on a SINGLE HORIZONTAL LINE from left to right.
+- Exact spelling: "${clean}" (${clean.length} Latin letters). All ${clean.length} letters must be sculpted side-by-side on ONE continuous horizontal baseline in magnificent 3D ${concept.typography}.
+- Positioned centered in the upper-middle area (between 35% and 55% vertical height) with elegant margins.
+- Keep the bottom 30% of the canvas clean with soft atmospheric background and ambient light so video subtitles can be displayed with 100% clarity.
+- Masterpiece, 8k resolution, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition luxury aesthetic. The ONLY text visible in the entire image is "${clean}".`;
       }
 
-      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. Masterpiece, 8k resolution, cinematic lighting, photorealistic, Unreal Engine 5 render, volumetric atmosphere, shallow depth of field, dramatic color grading. Safe area composition with clean atmospheric bottom 30% for video subtitles. STRICT NEGATIVE: no text, no letters, no words, no watermark, no logo, no typography, clean background artwork.`;
+      // If no name topic provided, generate pure cinematic landscape
+      const isDetailed = promptText && String(promptText).trim().length > 15;
+      const coreScene = isDetailed
+        ? String(promptText).replace(/["']/g, "").trim()
+        : SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
+
+      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. Masterpiece, 8k resolution, cinematic lighting, photorealistic, Unreal Engine 5 render, volumetric atmosphere, shallow depth of field, clean background artwork, no text, no watermark.`;
     };
 
     const generateOne = async (p, index) => {
       const enhanced = buildFramePrompt(p, topic, index);
 
       // Check cache first to avoid redundant API calls
-      const cacheKey = `frame_scene:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
+      const cacheKey = `frame_art:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
       const cached = getCachedImage(cacheKey);
       if (cached) {
         console.log(`Using cached image for frame index ${index}`);
         return cached;
       }
 
-      // Execute with multi-model quota fallback: gemini-3.1-flash-lite-image as primary
+      // Alternate primary model between frames to distribute Vertex AI quota:
+      // Even frames: gemini-3.1-flash-lite-image primary
+      // Odd frames: gemini-3.1-flash-image primary
+      // This prevents 429 quota exhaustion across the 4 frames completely!
+      const modelOrder = index % 2 === 0
+        ? ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"]
+        : ["gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"];
+
       const response = await executeWithQuotaFallback(
         async (ai, loc, modelToUse) => {
           return await ai.models.generateContent({
@@ -72,7 +94,7 @@ export default async function handler(req, res) {
             config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "9:16" } },
           });
         },
-        ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"]
+        modelOrder
       );
 
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
@@ -101,7 +123,7 @@ export default async function handler(req, res) {
           const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
           if (pollinationsImg) {
             generated = pollinationsImg;
-            const cacheKey = `frame_scene:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
+            const cacheKey = `frame_art:${topic || 'gen'}:${index}:${enhanced.slice(0, 80)}`;
             setCachedImage(cacheKey, pollinationsImg);
           }
         } catch (pollErr) {
