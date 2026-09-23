@@ -1,17 +1,15 @@
+import pg from "pg";
+const { Pool } = pg;
+
+const FALLBACK_DB_URL = "postgresql://neondb_owner:npg_CudM3xrHnsf5@ep-autumn-silence-b1dizcyq-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require";
+
 let pool = null;
 
 export async function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
-    if (!connectionString && !process.env.SQL_HOST) {
-      return null;
-    }
+    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || FALLBACK_DB_URL;
 
     try {
-      const pgModule = await import("pg");
-      const Pool = pgModule.default?.Pool || pgModule.Pool;
-      if (!Pool) return null;
-
       if (connectionString) {
         const isLocal = connectionString.includes("localhost") || connectionString.includes("127.0.0.1");
         pool = new Pool({
@@ -37,7 +35,7 @@ export async function getPool() {
         console.warn("PostgreSQL pool error:", err.message);
       });
     } catch (err) {
-      console.warn("PostgreSQL driver load failed:", err.message);
+      console.warn("PostgreSQL pool initialization failed:", err.message);
       return null;
     }
   }
