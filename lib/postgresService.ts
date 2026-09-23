@@ -104,6 +104,24 @@ export const deductUserCreditInPostgres = async (uid: string): Promise<number | 
   }
 };
 
+// 3.1. Telegram kanalga a'zo bo'lgani uchun 1 ta bepul video bonusini olish
+export const claimTelegramBonusInPostgres = async (uid: string): Promise<{ success: boolean; credits: number; granted: boolean } | null> => {
+  try {
+    const res = await fetch(`${API_BASE}/db-users.js`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, action: "claim_bonus" }),
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
+  } catch (err) {
+    console.warn("PostgreSQL: Telegram bonusini olishda xatolik:", err);
+    return null;
+  }
+};
+
 // 4. Admin orqali kredit yoki tasdiq holatini o'zgartirish
 export const updateUserCreditsInPostgres = async (
   uid: string,

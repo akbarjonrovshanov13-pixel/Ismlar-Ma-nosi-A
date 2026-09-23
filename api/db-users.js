@@ -55,7 +55,7 @@ export default async function handler(req, res) {
         // Auto-create user in PostgreSQL so they immediately exist in database!
         const safeEmail = (queryEmail && queryEmail.trim()) || `${uid}@user.ismlar.ai`;
         const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com' || uid === 'admin_akbarjon';
-        const initialCredits = isPrimaryAdmin ? 9999 : 3;
+        const initialCredits = isPrimaryAdmin ? 9999 : 0;
 
         const insertRes = await query(
           `INSERT INTO users (uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at)
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
 
       const safeEmail = (email && email.trim()) || `${uid}@user.ismlar.ai`;
       const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com' || uid === 'admin_akbarjon';
-      const initialCredits = isPrimaryAdmin ? 9999 : 3;
+      const initialCredits = isPrimaryAdmin ? 9999 : 0;
       const initialApproved = true;
 
       const upsertResult = await query(
@@ -153,11 +153,34 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. PATCH: Deduct credit (-1) or admin update credits/user details
+    // 3. PATCH: Deduct credit (-1), claim Telegram bonus, or admin update
     if (req.method === "PATCH") {
       const { uid, action, credits, isApproved, email, displayName } = req.body || {};
       if (!uid) {
         return res.status(400).json({ error: "uid maydoni kiritilishi shart" });
+      }
+
+      if (action === "claim_bonus") {
+        const checkRes = await query(`SELECT credits, total_allowed FROM users WHERE uid = $1`, [uid]);
+        const currentCredits = checkRes.rows.length > 0 ? Number(checkRes.rows[0].credits) : 0;
+        const totalAllowed = checkRes.rows.length > 0 ? Number(checkRes.rows[0].total_allowed) : 0;
+
+        // If user never had credits before or has 0 credits, grant 1 free video credit for subscribing to Telegram
+        if (totalAllowed === 0 || currentCredits <= 0) {
+          const result = await query(
+            `UPDATE users 
+             SET credits = GREATEST(credits, 1),
+                 total_allowed = GREATEST(total_allowed, 1),
+                 updated_at = NOW()
+             WHERE uid = $1
+             RETURNING credits`,
+            [uid]
+          );
+          const newCredits = result.rows.length > 0 ? Number(result.rows[0].credits) : 1;
+          return res.status(200).json({ success: true, credits: newCredits, granted: true });
+        }
+
+        return res.status(200).json({ success: true, credits: currentCredits, granted: false });
       }
 
       if (action === "deduct") {
@@ -171,7 +194,7 @@ export default async function handler(req, res) {
           [uid]
         );
 
-        const newCredits = result.rows.length > 0 ? Number(result.rows[0].credits) : 2;
+        const newCredits = result.rows.length > 0 ? Number(result.rows[0].credits) : 0;
         return res.status(200).json({ success: true, credits: newCredits });
       }
 

@@ -26,6 +26,7 @@ import {
   getUserProfileFromPostgres,
   syncUserWithPostgres,
   deductUserCreditInPostgres,
+  claimTelegramBonusInPostgres,
   saveVideoToPostgres,
   getUserSavedVideosFromPostgres,
   deleteSavedVideoFromPostgres
@@ -201,14 +202,15 @@ const App: React.FC = () => {
         // Save to local registry backup
         try {
           const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
-          const idx = local.findIndex((u: any) => u.userId === currentUser.uid);
+          const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
+          const defaultCreds = isPrimaryAdmin ? 9999 : 0;
           const item = {
             userId: currentUser.uid,
             email: safeEmail,
             displayName: safeName,
             photoURL: realPhoto,
-            credits: 3,
-            totalAllowed: 3,
+            credits: defaultCreds,
+            totalAllowed: defaultCreds,
             isApproved: true,
             createdAt: new Date().toISOString()
           };
@@ -239,13 +241,15 @@ const App: React.FC = () => {
     try {
       const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
       const idx = local.findIndex((u: any) => u.userId === userObj.uid || (u.email && u.email === safeEmail));
+      const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
+      const defaultCreds = isPrimaryAdmin ? 9999 : 0;
       const item = {
         userId: userObj.uid,
         email: safeEmail,
         displayName: safeName,
         photoURL: userObj.photoURL || '',
-        credits: 3,
-        totalAllowed: 3,
+        credits: defaultCreds,
+        totalAllowed: defaultCreds,
         isApproved: true,
         createdAt: new Date().toISOString()
       };
@@ -282,6 +286,31 @@ const App: React.FC = () => {
       console.error("Failed to fetch saved videos:", err);
     } finally {
       setIsLoadingSavedVideos(false);
+    }
+  };
+
+  const handleClaimTelegramBonus = async () => {
+    // 1. Open Telegram channel in a new tab
+    window.open('https://t.me/Akramjon1984', '_blank');
+
+    // 2. If user is not logged in, prompt sign in
+    if (!user) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    // 3. Claim bonus via PostgreSQL backend
+    try {
+      const res = await claimTelegramBonusInPostgres(user.uid);
+      if (res?.granted) {
+        setUserProfile(prev => prev ? { ...prev, credits: res.credits } : null);
+        alert("🎉 Tabriklaymiz! 1 ta bepul video hisobingizga qo'shildi. Endi ismingizni yozib videoni yaratishingiz mumkin!");
+      } else {
+        alert("✅ Siz allaqachon bepul videongizdan foydalangansiz yoki hisobingizda video yaratish uchun kredit mavjud.");
+      }
+      await fetchUserProfile(user);
+    } catch (err) {
+      console.error("Telegram bonus olishda xatolik:", err);
     }
   };
 
@@ -552,7 +581,7 @@ const App: React.FC = () => {
     const credits = freshProfile?.credits ?? 0;
 
     if (credits <= 0) {
-      alert("⚠️ Hisobingizda olmoslar (kreditlar) yetarli emas!\n\nDavom etish uchun tarif paketlaridan birini tanlang va hisobingizni to'ldiring.");
+      alert("⚠️ Hisobingizda video yaratish uchun kreditlar yetarli emas!\n\nTarif paketlaridan birini tanlang yoki Telegram kanalimizga a'zo bo'lib 1 ta bepul video oling!");
       setIsPricingOpen(true);
       return false;
     }
@@ -808,6 +837,33 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10">
         <div className="lg:col-span-5 space-y-5 sm:space-y-8">
+          {/* Telegram orqali 1 ta bepul video olish banneri */}
+          {(!user || (userProfile && userProfile.credits <= 0 && user.email?.toLowerCase() !== 'akbarjonrovshanov13@gmail.com')) && (
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-600/15 to-purple-600/15 border-2 border-sky-500/40 p-3.5 sm:p-4 shadow-xl shadow-sky-500/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white text-xl shadow-lg shadow-sky-500/40 flex-shrink-0 animate-bounce">
+                  ✈️
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-black text-sky-400 uppercase tracking-wider">Sovg'a</span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">1 ta Bepul Video</span>
+                  </div>
+                  <p className="text-xs text-slate-300 font-medium line-clamp-2 mt-0.5">
+                    Telegram kanalimizga obuna bo'ling va bepul video generatsiyani oling!
+                  </p>
+                </div>
+                <button
+                  onClick={handleClaimTelegramBonus}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-sky-500/30 transition flex items-center gap-1.5 flex-shrink-0 active:scale-95"
+                >
+                  <span>Olish</span>
+                  <span>🎁</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           <section className="bg-slate-900 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-800 shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
             
@@ -1483,6 +1539,8 @@ const App: React.FC = () => {
         isOpen={isPricingOpen}
         onClose={() => setIsPricingOpen(false)}
         onPaymentSubmitted={() => fetchUserProfile()}
+        onBonusClaimed={() => fetchUserProfile()}
+        userCredits={userProfile?.credits || 0}
       />
 
       {/* Admin Panel Modal */}
