@@ -25,13 +25,13 @@ tashkil topadi — ikkalasi bir xil matn bo'lishi kerak, faqat biri bo'lingan, b
 IMAGE_PROMPTS_EN UCHUN QAT'IY TALABLAR (Videodagi 4 ta asosiy bosqich uchun 4 ta kinematografik sahna):
 Har bir prompt aynan shu ISMNING ASL TUB MA'NOSI (masalan: jasurlik/mardlik, nafosat/go'zallik, donolik/ilm, nur/quyosh, dengiz/ummon, qudrat va h.k.) hamda jinsiga (erkak/ayol) 100% MOS KELADIGAN kinematografik, go'zal sahna bo'lishi shart!
 
-1-prompt: Ismning asosiy tub ma'nosi, aslzodaligi va ruhi (3D luxury name art visual, masalan: 3D polished gold sculpture, jade, crystal, or majestic hero silhouette on a cliff).
-2-prompt: Ism egasining yashirin ichki olami va fe'l-atvori (masalan: sirli sokin ko'l, yulduzli cheksiz osmon, qadimiy muhtasham kutubxona, teran sokin atmosfera — sof manzara, no text).
-3-prompt: Qalb kuchi, samimiyat va tuyg'ular (masalan: oltin quyosh nurlari, iliq mayin shafaq, tog'lar ortidagi yorug'lik zarrachalari — sof manzara, no text).
-4-prompt: Buyuk kelajak, g'alaba va yuksaklik (masalan: tonggi ufqda mahobatli tog' cho'qqisi, erkin cheksiz osmon, g'alabali yuksak panorama).
+1-prompt: Ismning tub ma'nosi, aslzodaligi va ruhi (masalan: mahobatli tog' cho'qqisidagi oltin qanotli burgut, zumrad vodiydagi ulug'vor arslon, moviy ummondagi sokin kema yoki billur qasr — sof ramziy sahna, no text).
+2-prompt: Ism egasining yashirin ichki olami va fe'l-atvori (masalan: sirli sokin ko'l, yulduzli cheksiz koinot, qadimiy muhtasham ziyo maskani, teran sokin atmosfera — sof manzara, no text).
+3-prompt: Qalb kuchi, samimiyat va tuyg'ular (masalan: oltin quyosh nurlari, iliq mayin shafaq, tog'lar ortidagi yorug'lik zarrachalari, sokin yorug'lik — sof manzara, no text).
+4-prompt: Buyuk kelajak, g'alaba va yuksaklik (masalan: tonggi ufqda mahobatli tog' cho'qqisi, erkin cheksiz osmon, g'alabali yuksak panorama — sof manzara, no text).
 
 QAT'IY QOIDALAR:
-1. 2- va 3-kadrlarda hech qanday ortiqcha matn yoki harflar bo'lmasin (no letters, no words), toki subtitrlar tiniq o'qilsin.
+1. BARCHA 4 ta kadrda hech qanday yozuv, harf yoki so'z bo'lmasin (NO text, NO letters, NO words), toki videodagi animatsiyali ism va subtitrlar tiniq, chiroyli ko'rinsin.
 2. Diniy ramzlar va sig'inish belgilaridan foydalanmang.
 3. Odam yuzini yaqindan ko'rsatmang (faqat siluet, orqa tomondan yoki ulug'vor manzara).
 4. Har bir prompt ingliz tilida, o'ta ta'sirli va sifatli bo'lsin (taxminan 15-25 so'z).

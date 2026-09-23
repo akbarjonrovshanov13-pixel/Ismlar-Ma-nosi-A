@@ -59,7 +59,7 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
     const seed = Math.floor(Math.random() * 10000000);
     const enhanced = `${String(prompt).trim().slice(0, 320)}, masterpiece, 8k, photorealistic, cinematic lighting, 9:16 vertical aspect ratio, ultra-detailed`;
     const cleanPrompt = encodeURIComponent(enhanced);
-    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+    const url = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux`;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
@@ -88,20 +88,18 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
 const MODEL_LOCATIONS = {
   "gemini-3.1-flash-lite-image": ["global"],
   "gemini-3.1-flash-image": ["global"],
-  "gemini-2.5-flash-image": ["us-central1", "us-east4", "europe-west1", "global"],
 };
 
 /**
- * Executes a request with automatic multi-model and multi-region quota fallback.
- * Prioritizes gemini-3.1-flash-lite-image (fast 5s generation at 'global') as primary,
- * falling back to gemini-3.1-flash-image and gemini-2.5-flash-image across active regions.
+ * Executes a request with automatic multi-model quota fallback.
+ * Strictly uses gemini-3.1-flash-lite-image (primary, ultra-fast 6s at 'global')
+ * with gemini-3.1-flash-image as secondary fallback at 'global'.
  */
 export async function executeWithQuotaFallback(
   apiRunner,
   models = [
     "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image",
-    "gemini-2.5-flash-image"
+    "gemini-3.1-flash-image"
   ]
 ) {
   let lastError = null;
