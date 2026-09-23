@@ -133,15 +133,36 @@ const App: React.FC = () => {
     }
 
     // 2. Listen to Firebase auth
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        const safeEmail = currentUser.email || `${currentUser.uid}@user.ismlar.ai`;
-        const safeName = currentUser.displayName || 'Foydalanuvchi';
+        // Resolve real email from currentUser, providerData, or Firestore
+        const providerData = currentUser.providerData || [];
+        const providerWithEmail = providerData.find((p: any) => p && p.email && p.email.includes('@'));
+
+        let realEmail = (currentUser.email && currentUser.email.includes('@') ? currentUser.email : '')
+          || providerWithEmail?.email
+          || '';
+        let realName = currentUser.displayName || providerWithEmail?.displayName || '';
+        let realPhoto = currentUser.photoURL || providerWithEmail?.photoURL || '';
+
+        if (!realEmail || !realEmail.includes('@')) {
+          try {
+            const fsProfile = await getUserProfileData(currentUser.uid);
+            if (fsProfile?.email && fsProfile.email.includes('@') && !fsProfile.email.includes('@user.ismlar.ai')) {
+              realEmail = fsProfile.email;
+            }
+            if (fsProfile?.displayName && !realName) realName = fsProfile.displayName;
+            if (fsProfile?.photoURL && !realPhoto) realPhoto = fsProfile.photoURL;
+          } catch {}
+        }
+
+        const safeEmail = realEmail || `${currentUser.uid}@user.ismlar.ai`;
+        const safeName = realName || 'Foydalanuvchi';
         const userObj = {
           uid: currentUser.uid,
           email: safeEmail,
           displayName: safeName,
-          photoURL: currentUser.photoURL || ''
+          photoURL: realPhoto
         };
 
         setUser(currentUser);
@@ -150,12 +171,12 @@ const App: React.FC = () => {
         // Save to local registry backup
         try {
           const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
-          const idx = local.findIndex((u: any) => u.userId === currentUser.uid || (u.email && u.email === safeEmail));
+          const idx = local.findIndex((u: any) => u.userId === currentUser.uid);
           const item = {
             userId: currentUser.uid,
             email: safeEmail,
             displayName: safeName,
-            photoURL: currentUser.photoURL || '',
+            photoURL: realPhoto,
             credits: 3,
             totalAllowed: 3,
             isApproved: true,

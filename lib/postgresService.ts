@@ -123,6 +123,27 @@ export const updateUserCreditsInPostgres = async (
   }
 };
 
+// 4.1. Admin orqali foydalanuvchi ma'lumotlarini (email, ism, kredit) to'liq tahrirlash
+export const updateUserDetailsInPostgres = async (
+  uid: string,
+  email?: string,
+  displayName?: string,
+  credits?: number,
+  isApproved?: boolean
+): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_BASE}/db-users.js`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, email, displayName, credits, isApproved }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("PostgreSQL: Foydalanuvchini yangilash xatosi:", err);
+    return false;
+  }
+};
+
 export interface PostgresAdminUsersResponse {
   users: UserProfileDocument[];
   dbConnected: boolean;

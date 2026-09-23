@@ -113,9 +113,15 @@ export default async function handler(req, res) {
         `INSERT INTO users (uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $5, $6, NOW(), NOW())
          ON CONFLICT (uid) DO UPDATE
-         SET email = EXCLUDED.email,
-             display_name = COALESCE(EXCLUDED.display_name, users.display_name),
-             photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
+         SET email = CASE 
+                       WHEN EXCLUDED.email NOT LIKE '%@user.ismlar.ai' THEN EXCLUDED.email 
+                       ELSE users.email 
+                     END,
+             display_name = CASE 
+                              WHEN EXCLUDED.display_name != '' AND EXCLUDED.display_name != 'Foydalanuvchi' THEN EXCLUDED.display_name 
+                              ELSE users.display_name 
+                            END,
+             photo_url = COALESCE(NULLIF(EXCLUDED.photo_url, ''), users.photo_url),
              updated_at = NOW()
          RETURNING id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at`,
         [uid, safeEmail, displayName || "", photoURL || "", initialCredits, initialApproved]
@@ -147,9 +153,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // 3. PATCH: Deduct credit (-1) or admin update credits
+    // 3. PATCH: Deduct credit (-1) or admin update credits/user details
     if (req.method === "PATCH") {
-      const { uid, action, credits, isApproved } = req.body || {};
+      const { uid, action, credits, isApproved, email, displayName } = req.body || {};
       if (!uid) {
         return res.status(400).json({ error: "uid maydoni kiritilishi shart" });
       }
@@ -169,21 +175,31 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, credits: newCredits });
       }
 
-      // Admin set credits or approval
-      if (typeof credits === "number" || typeof isApproved === "boolean") {
+      // Admin set credits, approval, email or displayName
+      if (email !== undefined || displayName !== undefined || typeof credits === "number" || typeof isApproved === "boolean") {
         const result = await query(
           `UPDATE users 
-           SET credits = COALESCE($2, credits),
-               total_allowed = COALESCE($2, total_allowed),
-               is_approved = COALESCE($3, is_approved),
+           SET email = COALESCE(NULLIF($2, ''), email),
+               display_name = COALESCE(NULLIF($3, ''), display_name),
+               credits = COALESCE($4, credits),
+               total_allowed = COALESCE($4, total_allowed),
+               is_approved = COALESCE($5, is_approved),
                updated_at = NOW()
            WHERE uid = $1
-           RETURNING uid, credits, total_allowed, is_approved`,
-          [uid, credits !== undefined ? credits : null, isApproved !== undefined ? isApproved : null]
+           RETURNING uid, email, display_name, credits, total_allowed, is_approved`,
+          [
+            uid,
+            email ? email.trim().toLowerCase() : null,
+            displayName ? displayName.trim() : null,
+            credits !== undefined ? credits : null,
+            isApproved !== undefined ? isApproved : null,
+          ]
         );
 
         const row = result.rows[0] || {
           uid,
+          email: email || '',
+          display_name: displayName || '',
           credits: credits ?? 3,
           total_allowed: credits ?? 3,
           is_approved: isApproved ?? true,

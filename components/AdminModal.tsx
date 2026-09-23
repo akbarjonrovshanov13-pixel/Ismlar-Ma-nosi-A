@@ -14,6 +14,7 @@ import {
   adminApprovePaymentInPostgres,
   adminRejectPaymentInPostgres,
   updateUserCreditsInPostgres,
+  updateUserDetailsInPostgres,
   syncUserWithPostgres
 } from '../lib/postgresService';
 
@@ -28,14 +29,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   isOpen,
   onClose,
   currentUserEmail,
-  onRefreshUserProfile
+  onRefreshUserProfile,
 }) => {
-  const [passkey, setPasskey] = useState('');
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [activeTab, setActiveTab] = useState<'PAYMENTS' | 'USERS'>('PAYMENTS');
-  
-  const [users, setUsers] = useState<UserProfileDocument[]>([]);
+  const [passkey, setPasskey] = useState('');
+  const [activeTab, setActiveTab] = useState<'PAYMENTS' | 'USERS'>('USERS');
   const [payments, setPayments] = useState<PaymentRequestDocument[]>([]);
+  const [users, setUsers] = useState<UserProfileDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
 
@@ -47,6 +47,11 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [newName, setNewName] = useState('');
   const [newCredits, setNewCredits] = useState(5);
   const [isAddingUser, setIsAddingUser] = useState(false);
+
+  const [editingUser, setEditingUser] = useState<UserProfileDocument | null>(null);
+  const [editEmailInput, setEditEmailInput] = useState('');
+  const [editNameInput, setEditNameInput] = useState('');
+  const [isSavingUserEdit, setIsSavingUserEdit] = useState(false);
 
   const ADMIN_PASSKEYS = ['Hisobot201415!'];
 
@@ -121,12 +126,42 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         }
       });
 
-      // Merge all unique users by email or userId
+      // Merge all unique users by userId (prioritizing real email over dummy @user.ismlar.ai)
       const userMap = new Map<string, UserProfileDocument>();
-      [...pgRes.users, ...firestoreUsers, ...localUsers].forEach(u => {
-        const key = (u.email || u.userId || '').toLowerCase();
-        if (key && !userMap.has(key)) {
-          userMap.set(key, u);
+      const allCandidateUsers = [...firestoreUsers, ...localUsers, ...pgRes.users];
+
+      allCandidateUsers.forEach(u => {
+        if (!u.userId) return;
+        const existing = userMap.get(u.userId);
+        if (!existing) {
+          userMap.set(u.userId, u);
+        } else {
+          const isExistingDummy = !existing.email || existing.email.includes('@user.ismlar.ai');
+          const isCandidateReal = u.email && !u.email.includes('@user.ismlar.ai');
+          const finalEmail = isCandidateReal ? u.email : (isExistingDummy ? u.email : existing.email);
+          const finalName = (existing.displayName === 'Foydalanuvchi' || !existing.displayName) && u.displayName
+            ? u.displayName
+            : existing.displayName;
+          const finalPhoto = existing.photoURL || u.photoURL;
+
+          userMap.set(u.userId, {
+            ...existing,
+            ...u,
+            email: finalEmail,
+            displayName: finalName,
+            photoURL: finalPhoto,
+            credits: typeof u.credits === 'number' ? u.credits : existing.credits
+          });
+
+          // If PostgreSQL had the dummy email but we discovered a real email, update PostgreSQL
+          if (finalEmail && isExistingDummy && isCandidateReal) {
+            syncUserWithPostgres({
+              uid: u.userId,
+              email: finalEmail,
+              displayName: finalName,
+              photoURL: finalPhoto
+            }).catch(() => {});
+          }
         }
       });
 
@@ -145,6 +180,73 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       console.error("Failed to load admin data:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openEditUserModal = (u: UserProfileDocument) => {
+    setEditingUser(u);
+    setEditEmailInput(u.email?.includes('@user.ismlar.ai') ? '' : u.email || '');
+    setEditNameInput(u.displayName === 'Foydalanuvchi' ? '' : u.displayName || '');
+    setEditCreditsInput(u.credits || 3);
+  };
+
+  const handleSaveUserEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setIsSavingUserEdit(true);
+    try {
+      const cleanEmail = editEmailInput.trim().toLowerCase() || editingUser.email;
+      const cleanName = editNameInput.trim() || editingUser.displayName;
+      const creditsNum = Number(editCreditsInput);
+
+      // 1. Update in PostgreSQL
+      await updateUserDetailsInPostgres(
+        editingUser.userId,
+        cleanEmail,
+        cleanName,
+        creditsNum,
+        editingUser.isApproved
+      );
+
+      // 2. Update in Firestore
+      await updateUserCreditsInFirestore(editingUser.userId, creditsNum, editingUser.isApproved).catch(() => {});
+
+      // 3. Update local storage
+      try {
+        const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        const idx = local.findIndex((u: any) => u.userId === editingUser.userId);
+        const updated = {
+          ...editingUser,
+          email: cleanEmail,
+          displayName: cleanName,
+          credits: creditsNum,
+          totalAllowed: creditsNum
+        };
+        if (idx >= 0) local[idx] = updated;
+        else local.unshift(updated);
+        localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+
+        const authUserRaw = localStorage.getItem('ismlar_auth_user');
+        if (authUserRaw) {
+          const authUser = JSON.parse(authUserRaw);
+          if (authUser && authUser.uid === editingUser.userId) {
+            localStorage.setItem('ismlar_auth_user', JSON.stringify({
+              ...authUser,
+              email: cleanEmail,
+              displayName: cleanName
+            }));
+          }
+        }
+      } catch {}
+
+      alert(`Foydalanuvchi ma'lumotlari muvaffaqiyatli yangilandi! (${cleanEmail})`);
+      setEditingUser(null);
+      loadAdminData();
+      if (onRefreshUserProfile) onRefreshUserProfile();
+    } catch (err: any) {
+      alert("Xatolik: " + err.message);
+    } finally {
+      setIsSavingUserEdit(false);
     }
   };
 
@@ -524,7 +626,21 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-slate-400 font-mono">{u.email}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {u.email?.includes('@user.ismlar.ai') ? (
+                                <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
+                                  ⚠️ Email belgilanmagan
+                                </span>
+                              ) : (
+                                <p className="text-xs text-slate-400 font-mono">{u.email}</p>
+                              )}
+                              <button
+                                onClick={() => openEditUserModal(u)}
+                                className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium"
+                              >
+                                Tahrirlash
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -551,33 +667,13 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               +10 Ism
                             </button>
                             
-                            {editUserId === u.userId ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  value={editCreditsInput}
-                                  onChange={(e) => setEditCreditsInput(Number(e.target.value))}
-                                  className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center text-white"
-                                />
-                                <button
-                                  onClick={() => handleCustomSetCredits(u.userId)}
-                                  className="px-2 py-1 bg-emerald-600 text-white rounded-lg text-xs font-bold"
-                                >
-                                  Saqlash
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  setEditUserId(u.userId);
-                                  setEditCreditsInput(u.credits);
-                                }}
-                                className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center justify-center text-xs"
-                                title="Limitni o'zgartirish"
-                              >
-                                ✏️
-                              </button>
-                            )}
+                            <button
+                              onClick={() => openEditUserModal(u)}
+                              className="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition flex items-center justify-center text-xs"
+                              title="Foydalanuvchi ma'lumotlarini tahrirlash"
+                            >
+                              ✏️
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -682,6 +778,104 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
                     <span>✓ Qo'shish</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✏️</span>
+                <h4 className="text-white font-bold text-base">Foydalanuvchini Tahrirlash</h4>
+              </div>
+              <button
+                onClick={() => setEditingUser(null)}
+                className="text-slate-400 hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Foydalanuvchining to'g'ri email manzili, ismi yoki video limitlarini o'zgartirishingiz mumkin.
+            </p>
+
+            <form onSubmit={handleSaveUserEdit} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Email manzil *</label>
+                <input
+                  type="email"
+                  required
+                  value={editEmailInput}
+                  onChange={(e) => setEditEmailInput(e.target.value)}
+                  placeholder="masalan: user@gmail.com"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Ism / Familiya</label>
+                <input
+                  type="text"
+                  value={editNameInput}
+                  onChange={(e) => setEditNameInput(e.target.value)}
+                  placeholder="masalan: Jasur Aliyev"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Qolgan Video Limitlar Soni</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[3, 5, 10, 20].map((num) => (
+                    <button
+                      type="button"
+                      key={num}
+                      onClick={() => setEditCreditsInput(num)}
+                      className={`py-2 text-xs rounded-xl font-bold border transition ${
+                        editCreditsInput === num
+                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {num} ta
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  max={9999}
+                  value={editCreditsInput}
+                  onChange={(e) => setEditCreditsInput(Math.max(0, parseInt(e.target.value) || 0))}
+                  className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingUserEdit}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center justify-center gap-1.5"
+                >
+                  {isSavingUserEdit ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>✓ Saqlash</span>
                   )}
                 </button>
               </div>
