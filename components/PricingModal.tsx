@@ -10,9 +10,9 @@ interface PricingModalProps {
   userCredits?: number;
 }
 
-export const TELEGRAM_CHANNEL = "https://t.me/Akramjon1984";
+export const TELEGRAM_CHANNEL = "https://t.me/Luxecoreuzbot";
 const PAYNET_LINK = "https://app.paynet.uz/?m=49156&i=4805742d-d76c-4b39-8c02-8ddf1c450f33&branchId=&actTypeId=144";
-const TELEGRAM_ADMIN = "https://t.me/Akramjon1984";
+const TELEGRAM_ADMIN = "https://t.me/Luxecoreuzbot";
 
 export const PricingModal: React.FC<PricingModalProps> = ({
   isOpen,
@@ -83,7 +83,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
         });
         await createPaymentRequestInFirestore(selectedPlan.name, selectedPlan.price).catch(() => {});
       }
-      setSubmittedMessage(`So'rov adminga yuborildi! Paynet to'lovini bajarib, chekni Telegram adminga (@Akramjon1984) yuboring.`);
+      setSubmittedMessage(`So'rov adminga yuborildi! Paynet to'lovini bajarib, chekni Telegram botga (@Luxecoreuzbot) yuboring.`);
       if (onPaymentSubmitted) onPaymentSubmitted();
     } catch (err: any) {
       console.error("Payment request error:", err);
@@ -322,7 +322,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
 
             <ol className="space-y-2 text-xs text-slate-300 list-decimal list-inside">
               <li>Pastdagi <b>Paynet to'lov linki</b> tugmasini bosing va to'lovni (<b>{selectedPlan.price}</b>) amalga oshiring.</li>
-              <li>To'lov bajarilgach, <b>chek skrinshotini</b> olib, Telegram adminga (<b>@Akramjon1984</b>) yuboring.</li>
+              <li>To'lov bajarilgach, <b>chek skrinshotini</b> olib, Telegram botga (<b>@Luxecoreuzbot</b>) yuboring.</li>
               <li>Admin chekni tasdiqlaganidan so'ng, hisobingizga kreditlar avtomatik biriktiriladi!</li>
             </ol>
 
@@ -344,7 +344,7 @@ export const PricingModal: React.FC<PricingModalProps> = ({
                 className="w-full sm:w-auto flex-1 bg-blue-600 hover:bg-blue-500 text-white text-center py-3 px-4 rounded-xl font-bold text-xs shadow-lg shadow-blue-600/20 border border-blue-400/30 transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span>✈️</span>
-                <span>Chekni Adminga Yuborish (@Akramjon1984)</span>
+                <span>Chekni Yuborish (@Luxecoreuzbot)</span>
               </button>
             </div>
           </div>

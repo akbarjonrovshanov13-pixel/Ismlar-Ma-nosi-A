@@ -290,8 +290,8 @@ const App: React.FC = () => {
   };
 
   const handleClaimTelegramBonus = async () => {
-    // 1. Open Telegram channel in a new tab
-    window.open('https://t.me/Akramjon1984', '_blank');
+    // 1. Open Telegram bot in a new tab
+    window.open('https://t.me/Luxecoreuzbot', '_blank');
 
     // 2. If user is not logged in, prompt sign in
     if (!user) {
@@ -850,7 +850,7 @@ const App: React.FC = () => {
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">1 ta Bepul Video</span>
                   </div>
                   <p className="text-xs text-slate-300 font-medium line-clamp-2 mt-0.5">
-                    Telegram kanalimizga obuna bo'ling va bepul video generatsiyani oling!
+                    Telegram botimizga (@Luxecoreuzbot) ulaning va 1 ta bepul videoni qo'lga kiriting!
                   </p>
                 </div>
                 <button
@@ -1214,12 +1214,12 @@ const App: React.FC = () => {
 
              <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
-                   <span className="text-[10px] text-slate-400 block">3 ta Ism (Paket)</span>
-                   <span className="font-black text-amber-400 text-sm">50 000 so'm</span>
+                   <span className="text-[10px] text-slate-400 block">3 ta Ism (Boshlang'ich)</span>
+                   <span className="font-black text-amber-400 text-sm">29 000 so'm</span>
                 </div>
                 <div className="bg-slate-950/80 p-3 rounded-xl border border-purple-500/30">
                    <span className="text-[10px] text-purple-300 block font-bold">10 ta Ism (Kreator)</span>
-                   <span className="font-black text-purple-400 text-sm">100 000 so'm</span>
+                   <span className="font-black text-purple-400 text-sm">79 000 so'm</span>
                 </div>
              </div>
 
@@ -1229,7 +1229,7 @@ const App: React.FC = () => {
                className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-white font-bold text-xs rounded-xl shadow-lg transition flex items-center justify-center gap-2"
              >
                <span>💳</span>
-               <span>To'lov qilish & Chekni yuborish (@Akramjon1984)</span>
+               <span>To'lov qilish & Chekni yuborish (@Luxecoreuzbot)</span>
              </button>
           </section>
 
