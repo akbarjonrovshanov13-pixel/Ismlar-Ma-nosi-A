@@ -709,10 +709,16 @@ const App: React.FC = () => {
       setState(prev => ({ ...prev, loadingStep: 'Subtitrlar ovozga moslanmoqda...' }));
       setSubtitleTimings(await alignSubtitles(audioBase64, scriptData.script_segments || []));
 
-      setState(prev => ({ ...prev, loadingStep: 'Sehrli rasmlar va kadrlar chizilmoqda...' }));
+      setState(prev => ({ ...prev, loadingStep: 'Sehrli rasmlar va kadrlar chizilmoqda (1/4)...' }));
       let finalImages: string[] = [];
       if (imageMode === ImageMode.GENERATE) {
-        finalImages = await generateImages(scriptData.image_prompts_en || [topic], topic);
+        finalImages = await generateImages(
+          scriptData.image_prompts_en || [topic],
+          topic,
+          (cur, total) => {
+            setState(prev => ({ ...prev, loadingStep: `Sehrli rasmlar va kadrlar chizilmoqda (${cur}/${total})...` }));
+          }
+        );
       } else if (imageMode === ImageMode.FIND) {
         finalImages = await findImages(topic);
       } else {
@@ -729,7 +735,7 @@ const App: React.FC = () => {
           script: scriptData.script_segments,
           fullScript: fullScriptWithOutro,
           hashtags: [...scriptData.hashtags, "#luxecore", "#qadoqlash"],
-          imageUrls: finalImages.length ? finalImages : ["/fallback/cup.jpg"],
+          imageUrls: finalImages.length ? finalImages : ["/fallback/scene-1.jpg", "/fallback/scene-2.jpg"],
           audioBase64,
           imagePrompts: scriptData.image_prompts_en,
           sources: scriptData.sources

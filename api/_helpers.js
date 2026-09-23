@@ -88,18 +88,19 @@ export async function fetchPollinationsImage(prompt, width = 768, height = 1344)
 const MODEL_LOCATIONS = {
   "gemini-3.1-flash-lite-image": ["global"],
   "gemini-3.1-flash-image": ["global"],
+  "gemini-2.5-flash-image": ["global", "us-central1"],
 };
 
 /**
  * Executes a request with automatic multi-model quota fallback.
- * Strictly uses gemini-3.1-flash-lite-image (primary, ultra-fast 6s at 'global')
- * with gemini-3.1-flash-image as secondary fallback at 'global'.
+ * Tries models in priority order with smooth fallback across models and locations.
  */
 export async function executeWithQuotaFallback(
   apiRunner,
   models = [
     "gemini-3.1-flash-lite-image",
-    "gemini-3.1-flash-image"
+    "gemini-3.1-flash-image",
+    "gemini-2.5-flash-image"
   ]
 ) {
   let lastError = null;
@@ -113,13 +114,8 @@ export async function executeWithQuotaFallback(
       } catch (err) {
         lastError = err;
         const msg = err?.message || "";
-        const isQuota = /429|RESOURCE_EXHAUSTED|Quota exceeded/i.test(msg);
-        const isNotFoundOrUnsupported = /NOT_FOUND|404|not found|not supported|invalid/i.test(msg);
-        if (isQuota || isNotFoundOrUnsupported) {
-          console.warn(`Model "${model}" at location "${loc}" failed (${msg}), attempting next fallback...`);
-          continue;
-        }
-        throw err; // Re-throw fatal non-quota errors immediately
+        console.warn(`Model "${model}" at location "${loc}" failed (${msg}), attempting next fallback...`);
+        continue;
       }
     }
   }

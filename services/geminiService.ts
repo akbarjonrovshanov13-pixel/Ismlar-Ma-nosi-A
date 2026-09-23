@@ -85,22 +85,55 @@ export const generateAudio = async (text: string, voiceType: VoiceType): Promise
   return "";
 };
 
-export const generateImages = async (prompts: string[], topic?: string): Promise<string[]> => {
-  // Backend serverless endpoint orqali (gemini-3.1-flash-lite-image, 4 xil uslub).
-  // `topic` yuborilsa, kadrlar ismning tub ma'nosi va jinsiga 100% mos yaratiladi.
+export const generateImages = async (
+  prompts: string[],
+  topic?: string,
+  onProgress?: (current: number, total: number) => void
+): Promise<string[]> => {
+  const validPrompts = (prompts && prompts.length > 0) ? prompts.slice(0, 4) : [topic || "Ism"];
+  const finalImages: string[] = [];
+
+  // Generate each frame individually: ~6-8s per frame, payload <2MB, completely immune to Vercel timeouts!
+  for (let i = 0; i < validPrompts.length; i++) {
+    if (onProgress) onProgress(i + 1, validPrompts.length);
+    try {
+      const res = await fetch(`${API_BASE}/generate-images.js`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: validPrompts[i], topic, frameIndex: i }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.image) {
+          finalImages.push(data.image);
+          continue;
+        }
+      }
+    } catch (err) {
+      console.warn(`Frame ${i} generation failed:`, err);
+    }
+  }
+
+  // If per-frame generation yielded images, return them
+  if (finalImages.length > 0) {
+    return finalImages;
+  }
+
+  // Fallback to batch request if per-frame failed entirely
   try {
     const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompts, topic }),
+      body: JSON.stringify({ prompts: validPrompts, topic }),
     });
     if (res.ok) {
       const data = await res.json();
       if (data.images && data.images.length > 0) return data.images;
     }
   } catch (err) {
-    console.warn("Backend image generation unavailable:", err);
+    console.warn("Backend batch image generation unavailable:", err);
   }
+
   return [];
 };
 

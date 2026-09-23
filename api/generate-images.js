@@ -78,13 +78,10 @@ CRITICAL TYPOGRAPHY & SPELLING:
         return cached;
       }
 
-      // Alternate primary model between frames to distribute Vertex AI quota:
-      // Even frames: gemini-3.1-flash-lite-image primary
-      // Odd frames: gemini-3.1-flash-image primary
-      // This prevents 429 quota exhaustion across the 4 frames completely!
+      // Alternate primary model between frames to distribute Vertex AI quota, with 2.5-flash-image as resilient 3rd fallback
       const modelOrder = index % 2 === 0
-        ? ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image"]
-        : ["gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"];
+        ? ["gemini-3.1-flash-lite-image", "gemini-3.1-flash-image", "gemini-2.5-flash-image"]
+        : ["gemini-3.1-flash-image", "gemini-3.1-flash-lite-image", "gemini-2.5-flash-image"];
 
       const response = await executeWithQuotaFallback(
         async (ai, loc, modelToUse) => {
@@ -133,6 +130,14 @@ CRITICAL TYPOGRAPHY & SPELLING:
 
       return generated || HD_WALLPAPERS[index % HD_WALLPAPERS.length];
     };
+
+    // ⚡ Single-frame mode: ultra-fast (~6-8s), lightweight payload (<2MB), 100% within Vercel limits!
+    if (typeof req.body?.frameIndex === "number" || (req.body?.prompt && !req.body?.prompts)) {
+      const idx = typeof req.body?.frameIndex === "number" ? req.body.frameIndex : 0;
+      const text = req.body?.prompt || (prompts && prompts[0]) || topic || "Ism";
+      const image = await processFrame(text, idx);
+      return res.status(200).json({ image, index: idx });
+    }
 
     // Generate frames sequentially to preserve Vertex AI RPM quota and prevent 429 burst errors
     const images = [];
