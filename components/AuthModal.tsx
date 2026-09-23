@@ -33,24 +33,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (user) {
         const safeEmail = user.email || `${user.uid}@user.ismlar.ai`;
         const safeName = user.displayName || 'Google Foydalanuvchisi';
+        const safePhoto = user.photoURL || '';
 
         // 1. Sync to PostgreSQL
         await syncUserWithPostgres({
           uid: user.uid,
           email: safeEmail,
           displayName: safeName,
-          photoURL: user.photoURL || ''
+          photoURL: safePhoto
         }).catch(() => {});
 
         // 2. Also save to local registry as backup
         try {
           const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
-          const idx = local.findIndex((u: any) => u.email === safeEmail || u.userId === user.uid);
+          const idx = local.findIndex((u: any) => u.userId === user.uid || (u.email && u.email === safeEmail));
           const item = {
             userId: user.uid,
             email: safeEmail,
             displayName: safeName,
-            photoURL: user.photoURL || '',
+            photoURL: safePhoto,
             credits: 3,
             totalAllowed: 3,
             isApproved: true,
@@ -61,7 +62,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           localStorage.setItem('ismlar_local_users', JSON.stringify(local));
         } catch {}
 
-        onLoginSuccess(user);
+        const userObj = {
+          uid: user.uid,
+          email: safeEmail,
+          displayName: safeName,
+          photoURL: safePhoto
+        };
+
+        onLoginSuccess(userObj);
         onClose();
       }
     } catch (err: any) {

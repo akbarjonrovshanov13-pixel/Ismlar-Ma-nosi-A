@@ -83,25 +83,49 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     if (result.user) {
-      await setDoc(doc(db, 'users', result.user.uid), {
+      const providerData = result.user.providerData || [];
+      const providerWithEmail = providerData.find((p: any) => p && p.email && p.email.includes('@'));
+      
+      const realEmail = (result.user.email && result.user.email.includes('@') ? result.user.email : '')
+        || providerWithEmail?.email
+        || (result as any)._tokenResponse?.email
+        || '';
+      const realName = result.user.displayName 
+        || providerWithEmail?.displayName 
+        || (result as any)._tokenResponse?.displayName 
+        || 'Google Foydalanuvchisi';
+      const realPhoto = result.user.photoURL 
+        || providerWithEmail?.photoURL 
+        || (result as any)._tokenResponse?.photoUrl 
+        || '';
+
+      // Non-blocking firestore sync
+      setDoc(doc(db, 'users', result.user.uid), {
         userId: result.user.uid,
-        email: result.user.email || '',
-        displayName: result.user.displayName || '',
-        photoURL: result.user.photoURL || '',
+        email: realEmail,
+        displayName: realName,
+        photoURL: realPhoto,
         createdAt: new Date().toISOString()
-      }, { merge: true });
+      }, { merge: true }).catch(() => {});
+
+      return {
+        ...result.user,
+        email: realEmail || result.user.email,
+        displayName: realName,
+        photoURL: realPhoto
+      };
     }
     return result.user;
   } catch (error: any) {
     console.error("Google sign in error:", error);
     const code = error?.code;
     if (code === 'auth/unauthorized-domain') {
-      alert("⚠️ Firebase Auth Xatosi (unauthorized-domain):\n\nFirebase Console -> Authentication -> Settings -> Authorized Domains qismida 'localhost' domeni ruxsat berilmagan.\n\nSiz 'Tezkor Kirish (Demo Admin)' tugmasi orqali cheksiz imkoniyat bilan kirishingiz mumkin!");
+      alert("⚠️ Firebase Auth Xatosi (unauthorized-domain):\n\nFirebase Console -> Authentication -> Settings -> Authorized Domains qismida vercel domeni ruxsat berilmagan.\n\nSiz 'Email' yorlig'i orqali emailingizni kiritib darhol kirishingiz mumkin!");
     } else if (code === 'auth/popup-blocked') {
-      alert("⚠️ Brauzer qalqib chiquvchi oynani (popup) blokladi. Pop-up ruxsatini yoqing yoki Tezkor Kirish tugmasidan foydalaning.");
+      alert("⚠️ Brauzer qalqib chiquvchi oynani (popup) blokladi. Iltimos, brauzerda pop-up oynalarga ruxsat bering yoki 'Email' yorlig'idan kiring.");
     } else if (code === 'auth/operation-not-allowed') {
-      alert("⚠️ Firebase Console dagi Authentication bo'limida Google Provayderi yoqilmagan.");
-    } else if (code !== 'auth/popup-closed-by-user') {
+      alert("⚠️ Firebase Console dagi Authentication bo'limida Google Provayderi yoqilmagan. Iltimos, 'Email' yorlig'idan kiring.");
+    } else if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
       alert(`⚠️ Google bilan kirishda xatolik: ${error.message || code || error}`);
     }
     throw error;
