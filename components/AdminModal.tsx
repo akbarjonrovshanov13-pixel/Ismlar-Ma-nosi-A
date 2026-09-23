@@ -660,6 +660,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                                   <span>⚠️</span> Email belgilanmagan
                                 </span>
                               )}
+                              {u.phone && (
+                                <span className="text-xs text-sky-300 font-mono font-bold flex items-center gap-1.5 bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded-lg">
+                                  <span>📱</span>
+                                  <span>{u.phone}</span>
+                                </span>
+                              )}
                               <button
                                 onClick={() => openEditUserModal(u)}
                                 className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium ml-1"

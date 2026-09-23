@@ -57,12 +57,17 @@ export async function ensureTables() {
         email TEXT NOT NULL,
         display_name TEXT,
         photo_url TEXT,
-        credits INTEGER NOT NULL DEFAULT 3,
-        total_allowed INTEGER NOT NULL DEFAULT 3,
+        phone TEXT,
+        claimed_telegram_bonus BOOLEAN NOT NULL DEFAULT false,
+        credits INTEGER NOT NULL DEFAULT 0,
+        total_allowed INTEGER NOT NULL DEFAULT 0,
         is_approved BOOLEAN NOT NULL DEFAULT false,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
+
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS claimed_telegram_bonus BOOLEAN NOT NULL DEFAULT false;
 
       CREATE TABLE IF NOT EXISTS videos (
         id SERIAL PRIMARY KEY,

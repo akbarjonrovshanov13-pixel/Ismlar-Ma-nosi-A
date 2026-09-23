@@ -10,6 +10,7 @@ import { PricingModal } from './components/PricingModal';
 import { AdminModal } from './components/AdminModal';
 import { AdSettingsModal } from './components/AdSettingsModal';
 import { AuthModal } from './components/AuthModal';
+import { TelegramBonusModal } from './components/TelegramBonusModal';
 import { 
   auth, 
   signInWithGoogle, 
@@ -74,6 +75,7 @@ const App: React.FC = () => {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdSettingsOpen, setIsAdSettingsOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isBonusModalOpen, setIsBonusModalOpen] = useState(false);
   const [adConfig, setAdConfig] = useState<AdConfig>({
     watermarkText: "✨ @luxe_core_uz",
     watermarkPosition: WatermarkPosition.TOP_RIGHT,
@@ -290,29 +292,17 @@ const App: React.FC = () => {
     }
   };
 
-  const handleClaimTelegramBonus = async () => {
-    // 1. Open Telegram bot in a new tab
-    window.open('https://t.me/Luxecoreuzbot', '_blank');
-
-    // 2. If user is not logged in, prompt sign in
+  const handleClaimTelegramBonus = () => {
     if (!user) {
       setIsAuthModalOpen(true);
       return;
     }
-
-    // 3. Claim bonus via PostgreSQL backend
-    try {
-      const res = await claimTelegramBonusInPostgres(user.uid);
-      if (res?.granted) {
-        setUserProfile(prev => prev ? { ...prev, credits: res.credits } : null);
-        alert("🎉 Tabriklaymiz! 1 ta bepul video hisobingizga qo'shildi. Endi ismingizni yozib videoni yaratishingiz mumkin!");
-      } else {
-        alert("✅ Siz allaqachon bepul videongizdan foydalangansiz yoki hisobingizda video yaratish uchun kredit mavjud.");
-      }
-      await fetchUserProfile(user);
-    } catch (err) {
-      console.error("Telegram bonus olishda xatolik:", err);
+    if (userProfile?.claimedTelegramBonus) {
+      alert("✅ Siz allaqachon bepul videongizdan foydalangansiz. Yangi video yaratish uchun tariflardan birini tanlang!");
+      setIsPricingOpen(true);
+      return;
     }
+    setIsBonusModalOpen(true);
   };
 
   const handleSaveCurrentVideo = async () => {
@@ -868,29 +858,45 @@ const App: React.FC = () => {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-10">
         <div className="lg:col-span-5 space-y-5 sm:space-y-8">
-          {/* Telegram orqali 1 ta bepul video olish banneri */}
+          {/* Telegram orqali 1 ta bepul video olish yoki tarifga o'tish banneri */}
           {(!user || (userProfile && userProfile.credits <= 0 && user.email?.toLowerCase() !== 'akbarjonrovshanov13@gmail.com')) && (
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-sky-500/15 via-blue-600/15 to-purple-600/15 border-2 border-sky-500/40 p-3.5 sm:p-4 shadow-xl shadow-sky-500/10">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-sky-500 flex items-center justify-center text-white text-xl shadow-lg shadow-sky-500/40 flex-shrink-0 animate-bounce">
-                  ✈️
+                  {userProfile?.claimedTelegramBonus ? '💎' : '✈️'}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-black text-sky-400 uppercase tracking-wider">Sovg'a</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">1 ta Bepul Video</span>
+                    <span className="text-[11px] font-black text-sky-400 uppercase tracking-wider">
+                      {userProfile?.claimedTelegramBonus ? 'Tariflar' : "Sovg'a"}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {userProfile?.claimedTelegramBonus ? 'Video Yaratish' : '1 ta Bepul Video'}
+                    </span>
                   </div>
                   <p className="text-xs text-slate-300 font-medium line-clamp-2 mt-0.5">
-                    Telegram botimizga (@Luxecoreuzbot) ulaning va 1 ta bepul videoni qo'lga kiriting!
+                    {userProfile?.claimedTelegramBonus
+                      ? "Bepul videongizdan foydalandingiz. Yangi video yaratish uchun qulay tarifni tanlang!"
+                      : "Telegram botimizga (@Luxecoreuzbot) ulaning va 1 ta bepul videoni qo'lga kiriting!"}
                   </p>
                 </div>
-                <button
-                  onClick={handleClaimTelegramBonus}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-sky-500/30 transition flex items-center gap-1.5 flex-shrink-0 active:scale-95"
-                >
-                  <span>Olish</span>
-                  <span>🎁</span>
-                </button>
+                {userProfile?.claimedTelegramBonus ? (
+                  <button
+                    onClick={() => setIsPricingOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-amber-500/30 transition flex items-center gap-1.5 flex-shrink-0 active:scale-95"
+                  >
+                    <span>Tariflar</span>
+                    <span>💎</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleClaimTelegramBonus}
+                    className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold shadow-lg shadow-sky-500/30 transition flex items-center gap-1.5 flex-shrink-0 active:scale-95"
+                  >
+                    <span>Olish</span>
+                    <span>🎁</span>
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1614,6 +1620,27 @@ const App: React.FC = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         onLoginSuccess={handleLoginSuccess}
+        onOpenBonusModal={() => setIsBonusModalOpen(true)}
+      />
+
+      {/* Telegram Bonus Modal (Ism + Telefon + Obuna) */}
+      <TelegramBonusModal
+        isOpen={isBonusModalOpen}
+        onClose={() => setIsBonusModalOpen(false)}
+        user={user}
+        userProfile={userProfile}
+        onBonusClaimed={(newCredits, phone) => {
+          setUserProfile(prev => prev ? {
+            ...prev,
+            credits: newCredits,
+            phone,
+            claimedTelegramBonus: true
+          } : null);
+          setCloudNotification("🎉 Tabriklaymiz! 1 ta bepul video hisobingizga muvaffaqiyatli qo'shildi!");
+          setTimeout(() => setCloudNotification(null), 4500);
+          if (user) fetchUserProfile(user);
+        }}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
       />
 
       {/* Cloud Toast Notification */}

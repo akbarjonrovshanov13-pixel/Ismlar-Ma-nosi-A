@@ -17,6 +17,8 @@ export interface UserProfileDocument {
   email: string;
   displayName?: string;
   photoURL?: string;
+  phone?: string;
+  claimedTelegramBonus?: boolean;
   credits: number;
   totalAllowed: number;
   isApproved: boolean;
@@ -104,13 +106,17 @@ export const deductUserCreditInPostgres = async (uid: string): Promise<number | 
   }
 };
 
-// 3.1. Telegram kanalga a'zo bo'lgani uchun 1 ta bepul video bonusini olish
-export const claimTelegramBonusInPostgres = async (uid: string): Promise<{ success: boolean; credits: number; granted: boolean } | null> => {
+// 3.1. Telegram kanalga a'zo bo'lgani uchun 1 ta bepul video bonusini olish (Ism va Telefon bilan)
+export const claimTelegramBonusInPostgres = async (
+  uid: string,
+  phone?: string,
+  displayName?: string
+): Promise<{ success: boolean; credits: number; granted: boolean; error?: string; phone?: string; claimedTelegramBonus?: boolean } | null> => {
   try {
     const res = await fetch(`${API_BASE}/db-users.js`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uid, action: "claim_bonus" }),
+      body: JSON.stringify({ uid, action: "claim_bonus", phone, displayName }),
     });
     if (res.ok) {
       return await res.json();
@@ -119,6 +125,24 @@ export const claimTelegramBonusInPostgres = async (uid: string): Promise<{ succe
   } catch (err) {
     console.warn("PostgreSQL: Telegram bonusini olishda xatolik:", err);
     return null;
+  }
+};
+
+// 3.2. Profil ma'lumotlarini (Telefon, Ism) PostgreSQL'da yangilash
+export const updateUserProfileInPostgres = async (
+  uid: string,
+  data: { phone?: string; displayName?: string }
+): Promise<boolean> => {
+  try {
+    const res = await fetch(`${API_BASE}/db-users.js`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid, action: "update_profile", ...data }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn("PostgreSQL: Profilni yangilash xatosi:", err);
+    return false;
   }
 };
 
