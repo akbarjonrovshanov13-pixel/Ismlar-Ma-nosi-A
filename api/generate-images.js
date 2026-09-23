@@ -65,6 +65,27 @@ COMPOSITION & SAFE AREA:
 - Photorealistic Octane render 8k, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition masterpiece. The ONLY text visible anywhere in the entire image is "${clean}".`;
 };
 
+const buildClimaxFramePrompt = (name, concept, font, sceneDescription) => {
+  const clean = String(name).trim().toUpperCase().slice(0, 20);
+  const scene = sceneDescription && sceneDescription.length > 15 
+    ? String(sceneDescription).replace(/["']/g, "").trim() 
+    : "A grand epic panoramic sunrise over golden mountain peaks and infinite horizon";
+
+  return `Vertical 9:16 smartphone wallpaper key visual. An epic cinematic scene: ${scene}.
+In the upper sky and horizon, the name "${clean}" is magnificently sculpted in radiant glowing 3D ${font.prompt} made of ${concept.art}.
+
+CRITICAL TYPOGRAPHY & SPELLING:
+- The entire word "${clean}" MUST be rendered on a SINGLE HORIZONTAL LINE from left to right.
+- NEVER split or break the name into multiple lines. NEVER stack letters vertically. All ${clean.length} letters must sit side-by-side on ONE continuous horizontal baseline.
+- Exact spelling: "${clean}" (${clean.length} Latin letters). Render each letter exactly once, no duplicated letters, no missing letters.
+- Typography: The dimensional letterforms are custom-sculpted in ${font.prompt}.
+
+COMPOSITION & SAFE AREA:
+- Positioned horizontally centered in the upper-middle area (between 35% and 55% vertical height).
+- Keep the bottom 30% of the canvas clean with soft atmospheric background and negative space so video subtitles can be displayed with 100% clarity.
+- Masterpiece, 8k resolution, cinematic golden lighting, photorealistic, majestic atmospheric depth, ultra-detailed. The ONLY text visible anywhere in the entire image is "${clean}".`;
+};
+
 // Fallback scene enhancers if no name topic is provided:
 const SCENE_ENHANCERS = [
   (p) => `Vertical 9:16 smartphone wallpaper. ${p}. Cinematic luxury aesthetic, dramatic rim lighting, majestic composition, 8k resolution, photorealistic, no text, no letters, no words.`,
@@ -103,21 +124,36 @@ export default async function handler(req, res) {
 
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-    const buildFramePrompt = (promptText, topicName, frameIndex) => {
+    const buildAtmosphericScenePrompt = (promptText, topicName, frameIndex) => {
       const isDetailed = promptText && String(promptText).trim().length > 15 && String(promptText).trim().toLowerCase() !== String(topicName || "").toLowerCase();
       
       if (isDetailed) {
-        // Use the AI-generated prompt specifically tailored to this name's meaning
         const clean = String(promptText).replace(/["']/g, "").trim();
         return `Vertical 9:16 smartphone wallpaper key visual. ${clean}. Masterpiece, cinematic lighting, 8k resolution, photorealistic, majestic composition, atmospheric depth, ultra-detailed, dramatic studio lighting, clean background, no text, no letters, no words, no watermark.`;
       }
 
-      // Fallback if no detailed prompt was provided
       if (topicName && String(topicName).trim().length > 0) {
         return `Vertical 9:16 smartphone wallpaper key visual. Majestic cinematic aesthetic scene symbolizing the noble spirit of "${topicName}". Dramatic lighting, epic landscape, golden hour glow, 8k resolution, photorealistic masterpiece, no text, no letters, no words, no watermark.`;
       }
 
       return SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText);
+    };
+
+    const buildFramePrompt = (promptText, topicName, frameIndex) => {
+      if (hasTopic) {
+        // Frame 0 (intro hook) and Frame 3 (climax outro) prominently show the name in gorgeous 3D typography
+        if (frameIndex === 0) {
+          const setup = frameSetups[0];
+          return buildVideoFramePrompt(topicName, setup.concept, setup.font);
+        }
+        if (frameIndex === 3 || (validPrompts.length === 2 && frameIndex === 1)) {
+          const setup = frameSetups[3 % frameSetups.length];
+          return buildClimaxFramePrompt(topicName, setup.concept, setup.font, promptText);
+        }
+      }
+
+      // Middle frames (1 and 2) provide pure atmospheric cinematic contrast without text, ensuring subtitles remain 100% readable
+      return buildAtmosphericScenePrompt(promptText, topicName, frameIndex);
     };
 
     const generateOne = async (p, index) => {
