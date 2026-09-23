@@ -21,6 +21,7 @@ import {
   deleteDoc 
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
+import { syncUserWithPostgres } from './postgresService';
 
 const app = initializeApp(firebaseConfig);
 
@@ -28,6 +29,12 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.addScope('email');
+googleProvider.addScope('profile');
+googleProvider.addScope('openid');
+googleProvider.setCustomParameters({
+  prompt: 'select_account'
+});
 
 export enum OperationType {
   CREATE = 'create',
@@ -83,23 +90,57 @@ export const signInWithGoogle = async () => {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     if (result.user) {
+      // 1. Get Google ID token claims (contains verified email, name, picture directly from Google)
+      let claimsEmail = '';
+      let claimsName = '';
+      let claimsPhoto = '';
+      try {
+        const idTokenResult = await result.user.getIdTokenResult(true);
+        if (idTokenResult && idTokenResult.claims) {
+          claimsEmail = (idTokenResult.claims.email as string) || '';
+          claimsName = (idTokenResult.claims.name as string) || '';
+          claimsPhoto = (idTokenResult.claims.picture as string) || '';
+        }
+      } catch {}
+
       const providerData = result.user.providerData || [];
-      const providerWithEmail = providerData.find((p: any) => p && p.email && p.email.includes('@'));
-      
-      const realEmail = (result.user.email && result.user.email.includes('@') ? result.user.email : '')
-        || providerWithEmail?.email
-        || (result as any)._tokenResponse?.email
-        || '';
-      const realName = result.user.displayName 
-        || providerWithEmail?.displayName 
-        || (result as any)._tokenResponse?.displayName 
-        || 'Google Foydalanuvchisi';
-      const realPhoto = result.user.photoURL 
-        || providerWithEmail?.photoURL 
-        || (result as any)._tokenResponse?.photoUrl 
+      const googleProviderInfo = providerData.find(
+        (p: any) => p && (p.providerId === 'google.com' || (p.email && p.email.includes('@')))
+      );
+      const tokenResponse = (result as any)._tokenResponse;
+
+      const realEmail = 
+        (result.user.email && result.user.email.includes('@') ? result.user.email : '')
+        || (claimsEmail && claimsEmail.includes('@') ? claimsEmail : '')
+        || (googleProviderInfo?.email && googleProviderInfo.email.includes('@') ? googleProviderInfo.email : '')
+        || (tokenResponse?.email && tokenResponse.email.includes('@') ? tokenResponse.email : '')
         || '';
 
-      // Non-blocking firestore sync
+      const realName = 
+        result.user.displayName 
+        || claimsName 
+        || googleProviderInfo?.displayName 
+        || tokenResponse?.displayName 
+        || (realEmail ? realEmail.split('@')[0] : 'Google Foydalanuvchisi');
+
+      const realPhoto = 
+        result.user.photoURL 
+        || claimsPhoto 
+        || googleProviderInfo?.photoURL 
+        || tokenResponse?.photoUrl 
+        || '';
+
+      // 1. Sync to PostgreSQL immediately with real email
+      if (realEmail && realEmail.includes('@')) {
+        syncUserWithPostgres({
+          uid: result.user.uid,
+          email: realEmail,
+          displayName: realName,
+          photoURL: realPhoto
+        }).catch((err) => console.warn("Postgres sync error:", err));
+      }
+
+      // 2. Non-blocking firestore sync
       setDoc(doc(db, 'users', result.user.uid), {
         userId: result.user.uid,
         email: realEmail,

@@ -650,16 +650,19 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
-                              {u.email?.includes('@user.ismlar.ai') ? (
-                                <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono">
-                                  ⚠️ Email belgilanmagan
-                                </span>
+                              {u.email && !u.email.includes('@user.ismlar.ai') ? (
+                                <p className="text-xs text-amber-300 font-mono font-bold flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg">
+                                  <span>✉️</span>
+                                  <span>{u.email}</span>
+                                </p>
                               ) : (
-                                <p className="text-xs text-slate-400 font-mono">{u.email}</p>
+                                <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono flex items-center gap-1">
+                                  <span>⚠️</span> Email belgilanmagan
+                                </span>
                               )}
                               <button
                                 onClick={() => openEditUserModal(u)}
-                                className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium"
+                                className="text-[11px] text-amber-400 hover:text-amber-300 underline font-medium ml-1"
                               >
                                 Tahrirlash
                               </button>

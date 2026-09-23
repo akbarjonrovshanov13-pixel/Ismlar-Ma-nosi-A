@@ -149,15 +149,31 @@ const App: React.FC = () => {
           }
         }
 
-        // Resolve real email from currentUser, providerData, or Firestore
+        // 1. Resolve real email and profile from Google ID token claims
+        let claimsEmail = '';
+        let claimsName = '';
+        let claimsPhoto = '';
+        try {
+          const idTokenResult = await currentUser.getIdTokenResult(true);
+          if (idTokenResult && idTokenResult.claims) {
+            claimsEmail = (idTokenResult.claims.email as string) || '';
+            claimsName = (idTokenResult.claims.name as string) || '';
+            claimsPhoto = (idTokenResult.claims.picture as string) || '';
+          }
+        } catch {}
+
+        // 2. Resolve from providerData
         const providerData = currentUser.providerData || [];
-        const providerWithEmail = providerData.find((p: any) => p && p.email && p.email.includes('@'));
+        const googleProviderInfo = providerData.find(
+          (p: any) => p && (p.providerId === 'google.com' || (p.email && p.email.includes('@')))
+        );
 
         let realEmail = (currentUser.email && currentUser.email.includes('@') ? currentUser.email : '')
-          || providerWithEmail?.email
+          || (claimsEmail && claimsEmail.includes('@') ? claimsEmail : '')
+          || (googleProviderInfo?.email && googleProviderInfo.email.includes('@') ? googleProviderInfo.email : '')
           || '';
-        let realName = currentUser.displayName || providerWithEmail?.displayName || '';
-        let realPhoto = currentUser.photoURL || providerWithEmail?.photoURL || '';
+        let realName = currentUser.displayName || claimsName || googleProviderInfo?.displayName || '';
+        let realPhoto = currentUser.photoURL || claimsPhoto || googleProviderInfo?.photoURL || '';
 
         if (!realEmail || !realEmail.includes('@')) {
           try {
