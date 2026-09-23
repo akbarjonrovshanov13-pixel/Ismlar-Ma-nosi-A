@@ -76,14 +76,50 @@ export const AdminModal: React.FC<AdminModalProps> = ({
       const firestoreUsers = await getAllUsersForAdmin().catch(() => []);
       const firestorePayments = await getAllPaymentRequestsForAdmin().catch(() => []);
 
-      // 3. Fallback: check localStorage for saved sessions
+      // 3. Fallback: check localStorage for saved sessions and current active user
       const localUsers: UserProfileDocument[] = (() => {
         try {
-          return JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+          const list: UserProfileDocument[] = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+          
+          // Also check currently active logged in user in this browser
+          const authUserRaw = localStorage.getItem('ismlar_auth_user');
+          if (authUserRaw) {
+            const authUser = JSON.parse(authUserRaw);
+            if (authUser && (authUser.uid || authUser.email)) {
+              const safeUid = authUser.uid || `user_${Date.now()}`;
+              const safeEmail = authUser.email || `${safeUid}@user.ismlar.ai`;
+              const exists = list.some((u: any) => u.userId === safeUid || (u.email && u.email.toLowerCase() === safeEmail.toLowerCase()));
+              if (!exists) {
+                list.unshift({
+                  userId: safeUid,
+                  email: safeEmail,
+                  displayName: authUser.displayName || 'Foydalanuvchi',
+                  photoURL: authUser.photoURL || '',
+                  credits: 3,
+                  totalAllowed: 3,
+                  isApproved: true,
+                  createdAt: new Date().toISOString()
+                });
+              }
+            }
+          }
+          return list;
         } catch {
           return [];
         }
       })();
+
+      // Auto-sync any local users to PostgreSQL so they are permanently saved in cloud DB
+      localUsers.forEach(u => {
+        if (u.userId && !pgRes.users.some(pu => pu.userId === u.userId || (pu.email && pu.email.toLowerCase() === (u.email || '').toLowerCase()))) {
+          syncUserWithPostgres({
+            uid: u.userId,
+            email: u.email || `${u.userId}@user.ismlar.ai`,
+            displayName: u.displayName,
+            photoURL: u.photoURL,
+          }).catch(() => {});
+        }
+      });
 
       // Merge all unique users by email or userId
       const userMap = new Map<string, UserProfileDocument>();

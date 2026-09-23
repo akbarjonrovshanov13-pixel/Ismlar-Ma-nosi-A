@@ -38,9 +38,18 @@ export interface PaymentRequestDocument {
 const API_BASE = '/api';
 
 // 1. Foydalanuvchi profilini PostgreSQL'dan olish
-export const getUserProfileFromPostgres = async (uid: string): Promise<UserProfileDocument | null> => {
+export const getUserProfileFromPostgres = async (
+  uid: string,
+  email?: string,
+  displayName?: string,
+  photoURL?: string
+): Promise<UserProfileDocument | null> => {
   try {
-    const res = await fetch(`${API_BASE}/db-users.js?uid=${encodeURIComponent(uid)}`);
+    let url = `${API_BASE}/db-users.js?uid=${encodeURIComponent(uid)}`;
+    if (email) url += `&email=${encodeURIComponent(email)}`;
+    if (displayName) url += `&displayName=${encodeURIComponent(displayName)}`;
+    if (photoURL) url += `&photoURL=${encodeURIComponent(photoURL)}`;
+    const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
       return data.user || null;

@@ -42,6 +42,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "uid maydoni kiritilishi shart" });
       }
 
+      const { email: queryEmail, displayName: queryName, photoURL: queryPhoto } = req.query || {};
+
       const result = await query(
         `SELECT id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at
          FROM users
@@ -50,19 +52,34 @@ export default async function handler(req, res) {
       );
 
       if (result.rows.length === 0) {
-        const isPrimaryAdmin = uid === "admin_akbarjon";
-        return res.status(200).json({
-          user: {
-            userId: uid,
-            email: isPrimaryAdmin ? "akbarjonrovshanov13@gmail.com" : "",
-            displayName: isPrimaryAdmin ? "Admin (Akbarjon)" : "Foydalanuvchi",
-            photoURL: "",
-            credits: isPrimaryAdmin ? 9999 : 3,
-            totalAllowed: isPrimaryAdmin ? 9999 : 3,
-            isApproved: true,
-            createdAt: new Date().toISOString(),
-          },
-        });
+        // Auto-create user in PostgreSQL so they immediately exist in database!
+        const safeEmail = (queryEmail && queryEmail.trim()) || `${uid}@user.ismlar.ai`;
+        const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com' || uid === 'admin_akbarjon';
+        const initialCredits = isPrimaryAdmin ? 9999 : 3;
+
+        const insertRes = await query(
+          `INSERT INTO users (uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $5, true, NOW(), NOW())
+           ON CONFLICT (uid) DO UPDATE SET updated_at = NOW()
+           RETURNING id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at`,
+          [uid, safeEmail, queryName || (isPrimaryAdmin ? "Admin (Akbarjon)" : "Foydalanuvchi"), queryPhoto || "", initialCredits]
+        );
+
+        const row = insertRes.rows[0];
+        if (row) {
+          return res.status(200).json({
+            user: {
+              userId: row.uid,
+              email: row.email,
+              displayName: row.display_name || "",
+              photoURL: row.photo_url || "",
+              credits: Number(row.credits) || initialCredits,
+              totalAllowed: Number(row.total_allowed) || initialCredits,
+              isApproved: Boolean(row.is_approved),
+              createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+            },
+          });
+        }
       }
 
       const row = result.rows[0];
@@ -83,11 +100,12 @@ export default async function handler(req, res) {
     // 2. POST: Upsert user on sign-in
     if (req.method === "POST") {
       const { uid, email, displayName, photoURL } = req.body || {};
-      if (!uid || !email) {
-        return res.status(400).json({ error: "uid va email shart" });
+      if (!uid) {
+        return res.status(400).json({ error: "uid maydoni shart" });
       }
 
-      const isPrimaryAdmin = email.toLowerCase() === 'akbarjonrovshanov13@gmail.com';
+      const safeEmail = (email && email.trim()) || `${uid}@user.ismlar.ai`;
+      const isPrimaryAdmin = safeEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com' || uid === 'admin_akbarjon';
       const initialCredits = isPrimaryAdmin ? 9999 : 3;
       const initialApproved = true;
 
@@ -100,18 +118,18 @@ export default async function handler(req, res) {
              photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url),
              updated_at = NOW()
          RETURNING id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at`,
-        [uid, email, displayName || "", photoURL || "", initialCredits, initialApproved]
+        [uid, safeEmail, displayName || "", photoURL || "", initialCredits, initialApproved]
       );
 
       const row = upsertResult.rows[0] || {
         uid,
-        email,
+        email: safeEmail,
         display_name: displayName || "Foydalanuvchi",
         photo_url: photoURL || "",
         credits: initialCredits,
         total_allowed: initialCredits,
-        is_approved: initialApproved,
-        created_at: new Date().toISOString(),
+        isApproved: initialApproved,
+        createdAt: new Date().toISOString(),
       };
 
       return res.status(200).json({

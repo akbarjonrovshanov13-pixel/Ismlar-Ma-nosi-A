@@ -96,20 +96,24 @@ const App: React.FC = () => {
 
   const fetchUserProfile = async (targetUser: any = user) => {
     if (targetUser && targetUser.uid) {
-      // 1. Try PostgreSQL first
-      let p = await getUserProfileFromPostgres(targetUser.uid);
+      const safeEmail = targetUser.email || `${targetUser.uid}@user.ismlar.ai`;
+      const safeName = targetUser.displayName || 'Foydalanuvchi';
+      const safePhoto = targetUser.photoURL || '';
+
+      // 1. Ensure user is synced to PostgreSQL (creates or updates user in DB)
+      let p = await syncUserWithPostgres({
+        uid: targetUser.uid,
+        email: safeEmail,
+        displayName: safeName,
+        photoURL: safePhoto,
+      }).catch(() => null);
+
       if (!p) {
-        // Sync user to PostgreSQL if missing
-        p = await syncUserWithPostgres({
-          uid: targetUser.uid,
-          email: targetUser.email || '',
-          displayName: targetUser.displayName,
-          photoURL: targetUser.photoURL,
-        });
+        p = await getUserProfileFromPostgres(targetUser.uid, safeEmail, safeName, safePhoto).catch(() => null);
       }
       // 2. Fallback to Firestore if PostgreSQL not available
       if (!p) {
-        p = await getUserProfileData(targetUser.uid);
+        p = await getUserProfileData(targetUser.uid).catch(() => null);
       }
       setUserProfile(p);
     } else {
@@ -131,23 +135,75 @@ const App: React.FC = () => {
     // 2. Listen to Firebase auth
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
-        localStorage.setItem('ismlar_auth_user', JSON.stringify({
+        const safeEmail = currentUser.email || `${currentUser.uid}@user.ismlar.ai`;
+        const safeName = currentUser.displayName || 'Foydalanuvchi';
+        const userObj = {
           uid: currentUser.uid,
-          email: currentUser.email,
-          displayName: currentUser.displayName,
-          photoURL: currentUser.photoURL
-        }));
-        fetchUserProfile(currentUser);
+          email: safeEmail,
+          displayName: safeName,
+          photoURL: currentUser.photoURL || ''
+        };
+
+        setUser(currentUser);
+        localStorage.setItem('ismlar_auth_user', JSON.stringify(userObj));
+
+        // Save to local registry backup
+        try {
+          const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+          const idx = local.findIndex((u: any) => u.userId === currentUser.uid || (u.email && u.email === safeEmail));
+          const item = {
+            userId: currentUser.uid,
+            email: safeEmail,
+            displayName: safeName,
+            photoURL: currentUser.photoURL || '',
+            credits: 3,
+            totalAllowed: 3,
+            isApproved: true,
+            createdAt: new Date().toISOString()
+          };
+          if (idx >= 0) local[idx] = { ...local[idx], ...item };
+          else local.unshift(item);
+          localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+        } catch {}
+
+        fetchUserProfile(userObj);
       }
     });
     return () => unsubscribe();
   }, []);
 
   const handleLoginSuccess = (loggedInUser: any) => {
-    setUser(loggedInUser);
-    localStorage.setItem('ismlar_auth_user', JSON.stringify(loggedInUser));
-    fetchUserProfile(loggedInUser);
+    const safeEmail = loggedInUser.email || `${loggedInUser.uid}@user.ismlar.ai`;
+    const safeName = loggedInUser.displayName || 'Foydalanuvchi';
+    const userObj = {
+      ...loggedInUser,
+      email: safeEmail,
+      displayName: safeName
+    };
+
+    setUser(userObj);
+    localStorage.setItem('ismlar_auth_user', JSON.stringify(userObj));
+
+    // Save to local registry backup
+    try {
+      const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+      const idx = local.findIndex((u: any) => u.userId === userObj.uid || (u.email && u.email === safeEmail));
+      const item = {
+        userId: userObj.uid,
+        email: safeEmail,
+        displayName: safeName,
+        photoURL: userObj.photoURL || '',
+        credits: 3,
+        totalAllowed: 3,
+        isApproved: true,
+        createdAt: new Date().toISOString()
+      };
+      if (idx >= 0) local[idx] = { ...local[idx], ...item };
+      else local.unshift(item);
+      localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+    } catch {}
+
+    fetchUserProfile(userObj);
   };
 
   const handleLogOut = async () => {

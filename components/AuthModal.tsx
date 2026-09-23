@@ -31,14 +31,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const user = await signInWithGoogle();
       if (user) {
-        // Also save to local registry as backup
+        const safeEmail = user.email || `${user.uid}@user.ismlar.ai`;
+        const safeName = user.displayName || 'Google Foydalanuvchisi';
+
+        // 1. Sync to PostgreSQL
+        await syncUserWithPostgres({
+          uid: user.uid,
+          email: safeEmail,
+          displayName: safeName,
+          photoURL: user.photoURL || ''
+        }).catch(() => {});
+
+        // 2. Also save to local registry as backup
         try {
           const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
-          const idx = local.findIndex((u: any) => u.email === user.email || u.userId === user.uid);
+          const idx = local.findIndex((u: any) => u.email === safeEmail || u.userId === user.uid);
           const item = {
             userId: user.uid,
-            email: user.email || '',
-            displayName: user.displayName || 'Google Foydalanuvchisi',
+            email: safeEmail,
+            displayName: safeName,
             photoURL: user.photoURL || '',
             credits: 3,
             totalAllowed: 3,
