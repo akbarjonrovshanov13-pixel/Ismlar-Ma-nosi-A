@@ -207,21 +207,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return bytes;
   };
 
-  // Helper: Convert Raw PCM to AudioBuffer
-  const pcmToAudioBuffer = (data: Uint8Array, ctx: AudioContext) => {
+  // Helper: Convert Raw PCM to AudioBuffer safely without byte alignment or offset errors
+  const pcmToAudioBuffer = (data: Uint8Array, ctx: AudioContext): AudioBuffer => {
     const sampleRate = 24000;
     const numChannels = 1;
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length / numChannels;
-    const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+    // Align to 2-byte boundary to prevent RangeError: byte length of Int16Array should be a multiple of 2
+    const safeBytes = data.byteLength - (data.byteLength % 2);
+    const frameCount = Math.floor(safeBytes / 2);
+    const buffer = ctx.createBuffer(numChannels, Math.max(1, frameCount), sampleRate);
+    const channelData = buffer.getChannelData(0);
     
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel);
-      for (let i = 0; i < frameCount; i++) {
-        channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-      }
+    // Use DataView with explicit little-endian: robust against any start offset or slice boundaries
+    const view = new DataView(data.buffer, data.byteOffset, safeBytes);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = view.getInt16(i * 2, true) / 32768.0;
     }
     return buffer;
+  };
+
+  // Helper: Create a procedural silent audio buffer when voice audio is missing or empty
+  const createSilentAudioBuffer = (ctx: AudioContext, targetDuration: number = 20): AudioBuffer => {
+    const sampleRate = ctx.sampleRate || 24000;
+    const safeDur = Math.max(5, targetDuration);
+    const frameCount = Math.floor(sampleRate * safeDur);
+    return ctx.createBuffer(1, frameCount, sampleRate);
   };
 
   // Helper: Generate Procedural Royalty-Free Background Music based on Style
@@ -435,20 +444,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // 1. Initialize Audio
   useEffect(() => {
+    let isCancelled = false;
     const initAudio = async () => {
-      if (!audioBase64) return;
       try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const bytes = decode(audioBase64);
-        const buffer = pcmToAudioBuffer(bytes, ctx);
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        
+        let buffer: AudioBuffer;
+        if (audioBase64 && audioBase64.trim().length > 0) {
+          try {
+            const bytes = decode(audioBase64.trim());
+            buffer = pcmToAudioBuffer(bytes, ctx);
+          } catch (pcmErr) {
+            console.warn("PCM audio parsing failed, creating fallback buffer:", pcmErr);
+            const estDur = Math.max(16, (scriptSegments?.length || 4) * 5.5);
+            buffer = createSilentAudioBuffer(ctx, estDur);
+          }
+        } else {
+          // No voice audio provided (e.g., loaded saved project or TTS offline)
+          const estDur = Math.max(16, (scriptSegments?.length || 4) * 5.5);
+          buffer = createSilentAudioBuffer(ctx, estDur);
+        }
+
         const bgm = createProceduralBGMBuffer(ctx, buffer.duration, bgmStyle);
         
-        setAudioContext(ctx);
-        setAudioBuffer(buffer);
-        setBgmBuffer(bgm);
-        setDuration(buffer.duration);
+        if (!isCancelled) {
+          setAudioContext(ctx);
+          setAudioBuffer(buffer);
+          setBgmBuffer(bgm);
+          setDuration(buffer.duration);
+        }
       } catch (e) {
-        console.error("Audio decoding failed:", e);
+        console.error("Audio initialization failed:", e);
       }
     };
     initAudio();
@@ -472,16 +500,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
     particlesRef.current = particles;
     
-    return () => { audioContext?.close(); };
-  }, [audioBase64]);
+    return () => {
+      isCancelled = true;
+      // Do NOT close audioContext here! Closing it permanently disables audio upon component re-render.
+    };
+  }, [audioBase64, scriptSegments]);
 
   // 2. Pre-process Images (Resize & Generate Random Motion)
   useEffect(() => {
+    let isCancelled = false;
+    const fallbackWallpapers = [
+      "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=1080&q=80",
+      "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1080&q=80",
+      "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=1080&q=80",
+      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1080&q=80"
+    ];
+    const validImages = (images && images.length > 0) ? images : fallbackWallpapers;
+
     const processImages = async () => {
-      const promises = images.map((src, index) => {
+      const promises = validImages.map((src, index) => {
         return new Promise<ProcessedImageLayer>((resolve) => {
           const img = new Image();
-          img.crossOrigin = "anonymous";
+          if (src && !src.startsWith("data:")) {
+            img.crossOrigin = "anonymous";
+          }
           img.src = src;
           
           img.onload = () => {
@@ -519,7 +561,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             const transitionType = index % 5;
 
             // Name frames: Frame 0 (intro hook) and Frame 3 / last frame (climax outro)
-            const isNameFrame = (index === 0 || index === (images.length - 1) || index === 3);
+            const isNameFrame = (index === 0 || index === (validImages.length - 1) || index === 3);
 
             let startX = 0, startY = 0, startScale = 1.0;
             let endX = 0, endY = 0, endScale = 1.15;
@@ -602,10 +644,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         });
       });
       const loaded = await Promise.all(promises);
-      setProcessedLayers(loaded);
+      if (!isCancelled) {
+        setProcessedLayers(loaded);
+      }
     };
-    if (images.length > 0) processImages();
-  }, [images]);
+    processImages();
+    return () => {
+      isCancelled = true;
+    };
+  }, [images, topic]);
 
   // How long the closing Luxe Core line takes to speak. Subtitles are laid out across the time
   // before it, so this value decides where every caption lands.
@@ -1459,8 +1506,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   }, [processedLayers, duration, preparedSubtitles, drawLayer, outroDuration, currentSpeed]);
 
-  const startAudioSources = (offset: number, speedOverride?: VoiceSpeed) => {
-    if (!audioContext || !audioBuffer) return;
+  const startAudioSources = (
+    offset: number, 
+    speedOverride?: VoiceSpeed, 
+    ctxOverride?: AudioContext, 
+    bufOverride?: AudioBuffer
+  ) => {
+    const ctx = ctxOverride || audioContext;
+    const buf = bufOverride || audioBuffer;
+    if (!ctx || !buf) return;
     const speed = speedOverride || currentSpeed;
 
     if (speechSourceRef.current) {
@@ -1475,31 +1529,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     stopPreviewBgm();
 
     // 1. Speech Audio
-    const speechSource = audioContext.createBufferSource();
-    speechSource.buffer = audioBuffer;
+    const speechSource = ctx.createBufferSource();
+    speechSource.buffer = buf;
     speechSource.playbackRate.value = speed;
-    speechSource.connect(audioContext.destination);
-    const bufferOffset = Math.min(Math.max(0, audioBuffer.duration - 0.05), Math.max(0, offset * speed));
+    speechSource.connect(ctx.destination);
+    const bufferOffset = Math.min(Math.max(0, buf.duration - 0.05), Math.max(0, offset * speed));
     speechSource.start(0, bufferOffset);
     speechSourceRef.current = speechSource;
 
     // 2. Background Music (if enabled)
-    const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
+    const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : (bgmBuffer || createProceduralBGMBuffer(ctx, buf.duration, bgmStyle));
     if (isBgmEnabled && activeBgm) {
-      const bgmSource = audioContext.createBufferSource();
+      const bgmSource = ctx.createBufferSource();
       bgmSource.buffer = activeBgm;
       bgmSource.loop = true;
-      const bgmGain = audioContext.createGain();
+      const bgmGain = ctx.createGain();
       bgmGain.gain.value = bgmVolume;
       bgmSource.connect(bgmGain);
-      bgmGain.connect(audioContext.destination);
+      bgmGain.connect(ctx.destination);
       const bgmOffset = offset % activeBgm.duration;
       bgmSource.start(0, bgmOffset);
       bgmSourceRef.current = bgmSource;
       bgmGainRef.current = bgmGain;
     }
 
-    setStartTime(audioContext.currentTime - offset);
+    setStartTime(ctx.currentTime - offset);
   };
 
   const stopAudioSources = () => {
@@ -1584,26 +1638,48 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [isPlaying, draw, processedLayers]);
 
   const togglePlay = async () => {
-    if (!audioContext || !audioBuffer) return;
+    try {
+      let ctx = audioContext;
+      if (!ctx || ctx.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        ctx = new AudioCtx();
+        setAudioContext(ctx);
+      }
 
-    if (isPlaying) {
-      stopAudioSources();
-      if (audioContext.state === 'running') {
-        await audioContext.suspend();
+      let buf = audioBuffer;
+      if (!buf) {
+        const estDur = Math.max(16, (scriptSegments?.length || 4) * 5.5);
+        buf = createSilentAudioBuffer(ctx, estDur);
+        setAudioBuffer(buf);
+        setDuration(buf.duration);
+        if (!bgmBuffer) {
+          const bgm = createProceduralBGMBuffer(ctx, buf.duration, bgmStyle);
+          setBgmBuffer(bgm);
+        }
       }
-      setIsPlaying(false);
-    } else {
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
+
+      if (isPlaying) {
+        stopAudioSources();
+        if (ctx.state === 'running') {
+          await ctx.suspend();
+        }
+        setIsPlaying(false);
+      } else {
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+        startAudioSources(currentTimeRef.current, currentSpeed, ctx, buf);
+        setIsPlaying(true);
       }
-      startAudioSources(currentTimeRef.current);
-      setIsPlaying(true);
+    } catch (err) {
+      console.error("togglePlay error:", err);
     }
   };
 
   const handleDownload = async () => {
       const canvas = canvasRef.current;
-      if (!canvas || !audioBuffer) return;
+      if (!canvas) return;
       if (downloadProgress !== null) return;
 
       setDownloadProgress(0);
@@ -1622,22 +1698,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       const stream = canvas.captureStream(FPS);
       
-      const recCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const recCtx = new AudioCtx();
       if (recCtx.state === 'suspended') {
         await recCtx.resume();
+      }
+
+      let buf = audioBuffer;
+      if (!buf) {
+        const estDur = Math.max(16, (scriptSegments?.length || 4) * 5.5);
+        buf = createSilentAudioBuffer(recCtx, estDur);
+        setAudioBuffer(buf);
+        setDuration(buf.duration);
       }
 
       const dest = recCtx.createMediaStreamDestination();
       
       // 1. Speech Audio
       const speechSource = recCtx.createBufferSource();
-      speechSource.buffer = audioBuffer;
+      speechSource.buffer = buf;
       speechSource.playbackRate.value = currentSpeed;
       speechSource.connect(dest);
       speechSource.start(0);
 
       // 2. Background Music Mixing (if enabled) with Smart Ducking
-      const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : bgmBuffer;
+      const activeBgm = bgmStyle === 'custom' ? customBgmBuffer : (bgmBuffer || createProceduralBGMBuffer(recCtx, buf.duration, bgmStyle));
       if (isBgmEnabled && activeBgm) {
         const bgmSource = recCtx.createBufferSource();
         bgmSource.buffer = activeBgm;
@@ -1716,7 +1801,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           const now = performance.now();
           const elapsed = (now - recStartTime) / 1000;
 
-          const effectiveDuration = duration > 0 ? duration / currentSpeed : duration;
+          const effectiveDuration = (buf && buf.duration > 0 ? buf.duration : (duration > 0 ? duration : 20)) / currentSpeed;
 
           if (elapsed >= effectiveDuration) {
                finished = true;
@@ -1986,7 +2071,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       ) : (
         <button
             onClick={handleDownload}
-            disabled={!audioBuffer || processedLayers.length === 0}
+            disabled={downloadProgress !== null}
             className="mt-4 w-full max-w-[300px] bg-gradient-to-r from-brand-600 via-purple-600 to-indigo-600 hover:from-brand-500 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-500 text-white font-bold py-4 px-6 rounded-2xl shadow-xl transition flex items-center justify-center gap-2.5 group active:scale-95 border border-brand-400/20"
         >
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 group-hover:animate-bounce text-amber-300">

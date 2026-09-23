@@ -87,6 +87,7 @@ const App: React.FC = () => {
   const [isLoadingSavedVideos, setIsLoadingSavedVideos] = useState(false);
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
   const [cloudNotification, setCloudNotification] = useState<string | null>(null);
+  const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
 
   const [state, setState] = useState<AppState>({
     isLoading: false,
@@ -373,6 +374,30 @@ const App: React.FC = () => {
       }
     });
     setIsSavedProjectsOpen(false);
+  };
+
+  const handleRegenerateAudio = async () => {
+    if (!state.videoData) return;
+    setIsRegeneratingAudio(true);
+    try {
+      const fullScript = state.videoData.fullScript || `${(state.videoData.script || []).join(' ')} ${DEFAULT_OUTRO_TEXT}`;
+      const audioBase64 = await generateAudio(fullScript, voice);
+      if (audioBase64) {
+        setState(prev => prev.videoData ? ({
+          ...prev,
+          videoData: {
+            ...prev.videoData,
+            audioBase64
+          }
+        }) : prev);
+        const timings = await alignSubtitles(audioBase64, state.videoData.script || []);
+        if (timings) setSubtitleTimings(timings);
+      }
+    } catch (e) {
+      console.warn("Audio generation failed:", e);
+    } finally {
+      setIsRegeneratingAudio(false);
+    }
   };
 
   const handleDeleteSavedVideo = async (videoId: string) => {
@@ -1437,6 +1462,25 @@ const App: React.FC = () => {
                         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                             <h3 className="text-brand-400 text-[10px] font-black uppercase tracking-tighter">AI Tahlili & Matn</h3>
                             <div className="flex items-center gap-2">
+                              {state.videoData && !state.videoData.audioBase64 && (
+                                <button
+                                  onClick={handleRegenerateAudio}
+                                  disabled={isRegeneratingAudio}
+                                  className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-xl border border-purple-500/30 font-bold transition flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  {isRegeneratingAudio ? (
+                                    <>
+                                      <div className="w-3 h-3 border border-purple-300 border-t-transparent rounded-full animate-spin" />
+                                      <span>Ovoz yozilmoqda...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>🎙️</span>
+                                      <span>Ovoz Qo'shish</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
                               <button
                                 onClick={handleSaveCurrentVideo}
                                 disabled={isSavingToCloud}
