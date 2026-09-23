@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { signInWithGoogle } from '../lib/firebase';
+import { db, signInWithGoogle } from '../lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 import { syncUserWithPostgres } from '../lib/postgresService';
 
 interface AuthModalProps {
@@ -30,6 +31,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const user = await signInWithGoogle();
       if (user) {
+        // Also save to local registry as backup
+        try {
+          const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+          const idx = local.findIndex((u: any) => u.email === user.email || u.userId === user.uid);
+          const item = {
+            userId: user.uid,
+            email: user.email || '',
+            displayName: user.displayName || 'Google Foydalanuvchisi',
+            photoURL: user.photoURL || '',
+            credits: 3,
+            totalAllowed: 3,
+            isApproved: true,
+            createdAt: new Date().toISOString()
+          };
+          if (idx >= 0) local[idx] = { ...local[idx], ...item };
+          else local.unshift(item);
+          localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+        } catch {}
+
         onLoginSuccess(user);
         onClose();
       }
@@ -56,7 +76,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const pseudoUid = 'email_' + Buffer.from(email).toString('base64').replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+      let encoded = "";
+      try {
+        encoded = btoa(encodeURIComponent(email).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+      } catch {
+        encoded = Math.random().toString(36).substring(2, 15);
+      }
+      const pseudoUid = 'email_' + encoded.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
       const userData = {
         uid: pseudoUid,
         email,
@@ -64,8 +90,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         photoURL: ""
       };
 
-      // Sync to PostgreSQL
-      await syncUserWithPostgres(userData);
+      // 1. Sync to PostgreSQL
+      await syncUserWithPostgres(userData).catch(() => {});
+
+      // 2. Sync to Firestore (if accessible)
+      try {
+        await setDoc(doc(db, 'users', pseudoUid), {
+          userId: pseudoUid,
+          email,
+          displayName: userData.displayName,
+          photoURL: "",
+          credits: 3,
+          totalAllowed: 3,
+          isApproved: true,
+          createdAt: new Date().toISOString()
+        }, { merge: true });
+      } catch {}
+
+      // 3. Sync to local registry backup
+      try {
+        const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        const idx = local.findIndex((u: any) => u.email === email || u.userId === pseudoUid);
+        const item = {
+          userId: pseudoUid,
+          email,
+          displayName: userData.displayName,
+          photoURL: "",
+          credits: 3,
+          totalAllowed: 3,
+          isApproved: true,
+          createdAt: new Date().toISOString()
+        };
+        if (idx >= 0) local[idx] = { ...local[idx], ...item };
+        else local.unshift(item);
+        localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+      } catch {}
 
       onLoginSuccess(userData);
       onClose();
@@ -86,8 +145,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         photoURL: ""
       };
 
-      // Sync admin to PostgreSQL
+      // 1. Sync admin to PostgreSQL
       syncUserWithPostgres(adminUser).catch(() => {});
+
+      // 2. Sync admin to Firestore
+      try {
+        setDoc(doc(db, 'users', adminUser.uid), {
+          userId: adminUser.uid,
+          email: adminUser.email,
+          displayName: adminUser.displayName,
+          photoURL: "",
+          credits: 9999,
+          totalAllowed: 9999,
+          isApproved: true,
+          createdAt: new Date().toISOString()
+        }, { merge: true }).catch(() => {});
+      } catch {}
+
+      // 3. Sync admin to local registry
+      try {
+        const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        const idx = local.findIndex((u: any) => u.email === adminUser.email);
+        const item = {
+          userId: adminUser.uid,
+          email: adminUser.email,
+          displayName: adminUser.displayName,
+          photoURL: "",
+          credits: 9999,
+          totalAllowed: 9999,
+          isApproved: true,
+          createdAt: new Date().toISOString()
+        };
+        if (idx >= 0) local[idx] = { ...local[idx], ...item };
+        else local.unshift(item);
+        localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+      } catch {}
 
       onLoginSuccess(adminUser);
       onClose();

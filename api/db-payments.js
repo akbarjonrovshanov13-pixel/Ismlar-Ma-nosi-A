@@ -1,4 +1,4 @@
-import { query } from "./_db.js";
+import { query, getPool } from "./_db.js";
 import { setCors } from "./_helpers.js";
 
 export default async function handler(req, res) {
@@ -8,6 +8,8 @@ export default async function handler(req, res) {
   try {
     // 1. GET: List all payments (for Admin)
     if (req.method === "GET") {
+      const p = await getPool();
+      const poolAvailable = Boolean(p);
       const result = await query(
         `SELECT id, user_id, user_email, display_name, plan_name, amount, status, created_at, approved_at
          FROM payments
@@ -26,7 +28,10 @@ export default async function handler(req, res) {
         approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null,
       }));
 
-      return res.status(200).json({ payments });
+      return res.status(200).json({ 
+        payments,
+        dbConnected: poolAvailable
+      });
     }
 
     // 2. POST: Create new payment request (User buys a plan)
@@ -43,7 +48,10 @@ export default async function handler(req, res) {
         [userId, userEmail, displayName || "Foydalanuvchi", planName, amount]
       );
 
-      const created = insertResult.rows[0];
+      const created = insertResult.rows[0] || {
+        id: "offline_" + Date.now(),
+        created_at: new Date().toISOString(),
+      };
       return res.status(201).json({
         success: true,
         id: String(created.id),

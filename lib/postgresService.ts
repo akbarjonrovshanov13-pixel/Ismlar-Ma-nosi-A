@@ -114,18 +114,28 @@ export const updateUserCreditsInPostgres = async (
   }
 };
 
+export interface PostgresAdminUsersResponse {
+  users: UserProfileDocument[];
+  dbConnected: boolean;
+  dbStatus?: string;
+}
+
 // 5. Admin uchun barcha foydalanuvchilar
-export const getAllUsersForAdminFromPostgres = async (): Promise<UserProfileDocument[]> => {
+export const getAllUsersForAdminFromPostgres = async (): Promise<PostgresAdminUsersResponse> => {
   try {
     const res = await fetch(`${API_BASE}/db-users.js?all=true`);
     if (res.ok) {
       const data = await res.json();
-      return data.users || [];
+      return {
+        users: data.users || [],
+        dbConnected: Boolean(data.dbConnected),
+        dbStatus: data.dbStatus
+      };
     }
-    return [];
+    return { users: [], dbConnected: false };
   } catch (err) {
     console.error("PostgreSQL: Foydalanuvchilar ro'yxati xatosi:", err);
-    return [];
+    return { users: [], dbConnected: false };
   }
 };
 

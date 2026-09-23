@@ -13,7 +13,8 @@ import {
   getAllPaymentsForAdminFromPostgres,
   adminApprovePaymentInPostgres,
   adminRejectPaymentInPostgres,
-  updateUserCreditsInPostgres
+  updateUserCreditsInPostgres,
+  syncUserWithPostgres
 } from '../lib/postgresService';
 
 interface AdminModalProps {
@@ -36,9 +37,16 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [users, setUsers] = useState<UserProfileDocument[]>([]);
   const [payments, setPayments] = useState<PaymentRequestDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDbConnected, setIsDbConnected] = useState<boolean>(true);
 
   const [editUserId, setEditUserId] = useState<string | null>(null);
   const [editCreditsInput, setEditCreditsInput] = useState<number>(5);
+
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newName, setNewName] = useState('');
+  const [newCredits, setNewCredits] = useState(5);
+  const [isAddingUser, setIsAddingUser] = useState(false);
 
   const ADMIN_PASSKEYS = ['Hisobot201415!'];
 
@@ -58,25 +66,112 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
-      // 1. Try PostgreSQL first
-      let [pgUsers, pgPayments] = await Promise.all([
-        getAllUsersForAdminFromPostgres(),
-        getAllPaymentsForAdminFromPostgres()
-      ]);
+      // 1. Fetch from PostgreSQL
+      const pgRes = await getAllUsersForAdminFromPostgres().catch(() => ({ users: [], dbConnected: false }));
+      const pgPayments = await getAllPaymentsForAdminFromPostgres().catch(() => []);
 
-      if (!pgUsers.length) {
-        pgUsers = await getAllUsersForAdmin();
-      }
-      if (!pgPayments.length) {
-        pgPayments = await getAllPaymentRequestsForAdmin();
-      }
+      setIsDbConnected(pgRes.dbConnected);
 
-      setUsers(pgUsers);
-      setPayments(pgPayments);
+      // 2. Fetch from Firestore
+      const firestoreUsers = await getAllUsersForAdmin().catch(() => []);
+      const firestorePayments = await getAllPaymentRequestsForAdmin().catch(() => []);
+
+      // 3. Fallback: check localStorage for saved sessions
+      const localUsers: UserProfileDocument[] = (() => {
+        try {
+          return JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        } catch {
+          return [];
+        }
+      })();
+
+      // Merge all unique users by email or userId
+      const userMap = new Map<string, UserProfileDocument>();
+      [...pgRes.users, ...firestoreUsers, ...localUsers].forEach(u => {
+        const key = (u.email || u.userId || '').toLowerCase();
+        if (key && !userMap.has(key)) {
+          userMap.set(key, u);
+        }
+      });
+
+      // Merge all unique payments by id
+      const paymentMap = new Map<string, PaymentRequestDocument>();
+      [...pgPayments, ...firestorePayments].forEach(p => {
+        const key = p.id || `${p.userId}_${p.createdAt}`;
+        if (key && !paymentMap.has(key)) {
+          paymentMap.set(key, p);
+        }
+      });
+
+      setUsers(Array.from(userMap.values()));
+      setPayments(Array.from(paymentMap.values()));
     } catch (err) {
       console.error("Failed to load admin data:", err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAddUserManually = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = newEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      alert("Iltimos, to'g'ri email manzilini kiriting!");
+      return;
+    }
+
+    setIsAddingUser(true);
+    try {
+      let encoded = "";
+      try {
+        encoded = btoa(encodeURIComponent(cleanEmail).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
+      } catch {
+        encoded = Math.random().toString(36).substring(2, 15);
+      }
+      const pseudoUid = 'email_' + encoded.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24);
+      const newUserObj: UserProfileDocument = {
+        userId: pseudoUid,
+        email: cleanEmail,
+        displayName: newName.trim() || cleanEmail.split('@')[0],
+        photoURL: "",
+        credits: newCredits,
+        totalAllowed: newCredits,
+        isApproved: true,
+        createdAt: new Date().toISOString()
+      };
+
+      // 1. Sync to PostgreSQL
+      await syncUserWithPostgres({
+        uid: pseudoUid,
+        email: cleanEmail,
+        displayName: newUserObj.displayName,
+        photoURL: ""
+      }).catch(() => {});
+      await updateUserCreditsInPostgres(pseudoUid, newCredits, true).catch(() => {});
+
+      // 2. Sync to Firestore
+      await updateUserCreditsInFirestore(pseudoUid, newCredits, true).catch(() => {});
+
+      // 3. Sync to local registry
+      try {
+        const local = JSON.parse(localStorage.getItem('ismlar_local_users') || '[]');
+        const idx = local.findIndex((u: any) => u.email === cleanEmail);
+        if (idx >= 0) local[idx] = newUserObj;
+        else local.unshift(newUserObj);
+        localStorage.setItem('ismlar_local_users', JSON.stringify(local));
+      } catch {}
+
+      alert(`Foydalanuvchi muvaffaqiyatli qo'shildi! (${cleanEmail} -> ${newCredits} ta kredit)`);
+      setShowAddUserModal(false);
+      setNewEmail('');
+      setNewName('');
+      setNewCredits(5);
+      loadAdminData();
+      if (onRefreshUserProfile) onRefreshUserProfile();
+    } catch (err: any) {
+      alert("Xatolik: " + err.message);
+    } finally {
+      setIsAddingUser(false);
     }
   };
 
@@ -228,13 +323,24 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </span>
               </button>
 
-              <button
-                onClick={loadAdminData}
-                className="ml-auto text-xs text-slate-400 hover:text-white pb-3 flex items-center gap-1"
-                title="Yangilash"
-              >
-                <span>🔄</span> Yangilash
-              </button>
+              <div className="ml-auto flex items-center gap-2 pb-3">
+                <button
+                  onClick={() => setShowAddUserModal(true)}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow transition flex items-center gap-1.5"
+                  title="Yangi foydalanuvchi qo'shish"
+                >
+                  <span>➕</span>
+                  <span className="hidden sm:inline">Foydalanuvchi</span> qo'shish
+                </button>
+                <button
+                  onClick={loadAdminData}
+                  className="px-2.5 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition flex items-center gap-1"
+                  title="Yangilash"
+                >
+                  <span>🔄</span>
+                  <span className="hidden sm:inline">Yangilash</span>
+                </button>
+              </div>
             </div>
 
             {/* Tab Body */}
@@ -322,10 +428,37 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </div>
               ) : (
                 /* Users List */
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {!isDbConnected && (
+                    <div className="bg-amber-950/40 border border-amber-500/40 rounded-2xl p-4 text-xs text-amber-200 space-y-2">
+                      <div className="flex items-center gap-2 font-bold text-amber-300">
+                        <span>⚠️</span>
+                        <span>PostgreSQL bazasi ulanmagan (Foydalanuvchilar hozircha brauzer va Firestore xotirasidan olinmoqda)</span>
+                      </div>
+                      <p className="text-slate-300 text-[11px] leading-relaxed">
+                        Foydalanuvchilar va to'lovlar hamma qurilmalarda bir xil saqlanishi uchun Vercel'da bepul Postgres bazasini ulab qo'yish mumkin:
+                      </p>
+                      <div className="bg-slate-950/70 p-2.5 rounded-xl font-mono text-[11px] text-slate-300 space-y-1">
+                        <div>1. <a href="https://vercel.com/dashboard" target="_blank" rel="noreferrer" className="text-amber-400 underline hover:text-amber-300">Vercel Dashboard</a> &rarr; <strong>Storage</strong> bo'limiga kiring.</div>
+                        <div>2. <strong>Create Database</strong> &rarr; <strong>Postgres (Neon)</strong> ni tanlang va yarating.</div>
+                        <div>3. <strong>Connect to Project</strong> tugmasini bosing. Bo'ldi, tizim avtomatik ulanadi!</div>
+                      </div>
+                    </div>
+                  )}
+
                   {users.length === 0 ? (
-                    <div className="py-12 text-center text-slate-500">
-                      <p className="text-sm">Ro'yxatdan o'tgan foydalanuvchilar topilmadi.</p>
+                    <div className="py-12 text-center text-slate-400 space-y-3">
+                      <div className="text-3xl">👥</div>
+                      <p className="text-sm font-semibold text-slate-200">Ro'yxatdan o'tgan foydalanuvchilar topilmadi</p>
+                      <p className="text-xs text-slate-400 max-w-md mx-auto">
+                        Foydalanuvchilar saytda Google yoki Email orqali kirganida shu yerda paydo bo'ladi. Xohlasangiz, istalgan odamni hoziroq o'zingiz qo'shishingiz mumkin:
+                      </p>
+                      <button
+                        onClick={() => setShowAddUserModal(true)}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-lg transition"
+                      >
+                        <span>➕</span> Yangi Foydalanuvchi Qo'shish
+                      </button>
                     </div>
                   ) : (
                     users.map((u) => (
@@ -422,6 +555,104 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         )}
 
       </div>
+
+      {/* Manual Add User Modal */}
+      {showAddUserModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">➕</span>
+                <h4 className="text-white font-bold text-base">Foydalanuvchi Qo'shish</h4>
+              </div>
+              <button
+                onClick={() => setShowAddUserModal(false)}
+                className="text-slate-400 hover:text-white text-lg w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-800 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Foydalanuvchining email manzili va unga beriladigan video kreditlar sonini kiriting. U saytga kirganda shu limitdan foydalana oladi.
+            </p>
+
+            <form onSubmit={handleAddUserManually} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Email manzil *</label>
+                <input
+                  type="email"
+                  required
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  placeholder="masalan: user@gmail.com"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Ism / Familiya (ixtiyoriy)</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="masalan: Jasur Aliyev"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-slate-300 mb-1">Beriladigan Video Kreditlar Soni</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[3, 5, 10, 20].map((num) => (
+                    <button
+                      type="button"
+                      key={num}
+                      onClick={() => setNewCredits(num)}
+                      className={`py-2 text-xs rounded-xl font-bold border transition ${
+                        newCredits === num
+                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                      }`}
+                    >
+                      {num} ta
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={newCredits}
+                  onChange={(e) => setNewCredits(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="mt-2 w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddUserModal(false)}
+                  className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingUser}
+                  className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center justify-center gap-1.5"
+                >
+                  {isAddingUser ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <span>✓ Qo'shish</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

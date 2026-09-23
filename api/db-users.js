@@ -1,4 +1,4 @@
-import { query } from "./_db.js";
+import { query, getPool } from "./_db.js";
 import { setCors } from "./_helpers.js";
 
 export default async function handler(req, res) {
@@ -12,6 +12,8 @@ export default async function handler(req, res) {
 
       // If 'all' is requested, return all users (for Admin modal)
       if (all === "true") {
+        const p = await getPool();
+        const poolAvailable = Boolean(p);
         const result = await query(
           `SELECT id, uid, email, display_name, photo_url, credits, total_allowed, is_approved, created_at, updated_at
            FROM users
@@ -29,7 +31,11 @@ export default async function handler(req, res) {
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
         }));
 
-        return res.status(200).json({ users: usersList });
+        return res.status(200).json({ 
+          users: usersList,
+          dbConnected: poolAvailable,
+          dbStatus: poolAvailable ? "PostgreSQL ulangan" : "PostgreSQL ulanmagan"
+        });
       }
 
       if (!uid) {

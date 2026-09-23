@@ -28,4 +28,4 @@ dist-ssr
 .vercel
 .env*
 .claude
-
+scratch/
