@@ -91,6 +91,17 @@ const App: React.FC = () => {
   const [cloudNotification, setCloudNotification] = useState<string | null>(null);
   const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
 
+  // In-App browser detection (Instagram, TikTok, Facebook)
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [showInAppNotice, setShowInAppNotice] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.userAgent) {
+      const isIAB = /Instagram|FBAN|FBAV|TikTok|Line|Twitter/i.test(navigator.userAgent);
+      setIsInAppBrowser(isIAB);
+    }
+  }, []);
+
   const [state, setState] = useState<AppState>({
     isLoading: false,
     loadingStep: '',
@@ -769,6 +780,27 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
+      {/* Instagram / In-App Browser Guidance Banner */}
+      {isInAppBrowser && showInAppNotice && (
+        <div className="bg-gradient-to-r from-pink-950/90 via-purple-950/90 to-slate-950/90 border-b border-pink-500/40 px-3 py-2 text-white shadow-xl backdrop-blur-md sticky top-0 z-[60]">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="text-base sm:text-lg flex-shrink-0 animate-pulse">📸</span>
+              <p className="text-[11px] sm:text-xs leading-snug">
+                <strong className="text-pink-300">Instagram brauzeridasiz:</strong> Videoni galereyaga to'liq saqlash uchun yuqori o'ngdagi <strong className="text-amber-300 font-mono text-xs">(⋯) uch nuqta</strong>ni bosib, <strong className="text-pink-200">"Brauzerda ochish" (Safari / Chrome)</strong> ni tanlang!
+              </p>
+            </div>
+            <button
+              onClick={() => setShowInAppNotice(false)}
+              className="text-slate-300 hover:text-white text-[10px] sm:text-xs px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 flex-shrink-0 transition active:scale-95"
+              title="Yopish"
+            >
+              ✕ Tushundim
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-shrink-0">

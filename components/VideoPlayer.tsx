@@ -185,6 +185,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Download Progress State
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
 
+  // Ready Video Data for Mobile / Instagram Web Share & In-App Player
+  interface ReadyVideoData {
+    url: string;
+    blob: Blob;
+    file?: File;
+    fileName: string;
+  }
+  const [readyVideo, setReadyVideo] = useState<ReadyVideoData | null>(null);
+  const [isReadyModalOpen, setIsReadyModalOpen] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+
+  // Clean up object URL when component unmounts
+  useEffect(() => {
+    return () => {
+      if (readyVideo?.url) {
+        URL.revokeObjectURL(readyVideo.url);
+      }
+    };
+  }, [readyVideo?.url]);
+
   // Instagram Reels Standard: 1080x1920 @ 30FPS
   const WIDTH = 1080; 
   const HEIGHT = 1920;
@@ -1682,6 +1702,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (!canvas) return;
       if (downloadProgress !== null) return;
 
+      // Clean up previous ready video if exists
+      if (readyVideo?.url) {
+        URL.revokeObjectURL(readyVideo.url);
+        setReadyVideo(null);
+      }
+      setIsReadyModalOpen(false);
+
       setDownloadProgress(0);
       if (isPlaying) setIsPlaying(false);
 
@@ -1774,21 +1801,78 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           stopTicker();
           const blob = new Blob(chunks, { type: mimeType });
           const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
           
           const safeFilename = topic.replace(/[^a-z0-9а-яёўқғҳ ]/gi, '').trim().replace(/\s+/g, '_').substring(0, 50);
-          a.download = `${safeFilename || 'ism_manosi_video'}_1080p.${fileExt}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          const finalFileName = `${safeFilename || 'ism_manosi_video'}_1080p.${fileExt}`;
+
+          let file: File | undefined;
+          try {
+            file = new File([blob], finalFileName, { type: mimeType });
+          } catch (e) {
+            console.warn("File constructor unavailable:", e);
+          }
+
+          setReadyVideo({
+            url,
+            blob,
+            file,
+            fileName: finalFileName
+          });
+          setIsReadyModalOpen(true);
           
           recCtx.close();
-          URL.revokeObjectURL(url);
           setDownloadProgress(null);
           currentTimeRef.current = 0;
           draw(0);
+
+          // For standard desktop browsers (Chrome, Firefox, Edge on PC/Mac), trigger direct download
+          const isMobileOrInApp = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Instagram|FBAN|FBAV|TikTok/i.test(navigator.userAgent);
+          if (!isMobileOrInApp) {
+            try {
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = finalFileName;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+            } catch (err) {
+              console.warn("Desktop direct download err:", err);
+            }
+          }
       };
+
+  const handleShareOrSave = async () => {
+    if (!readyVideo) return;
+    setIsSharing(true);
+    try {
+      if (readyVideo.file && navigator.canShare && navigator.canShare({ files: [readyVideo.file] })) {
+        await navigator.share({
+          files: [readyVideo.file],
+          title: readyVideo.fileName,
+          text: `${topic} ismining ma'nosi videosi`
+        });
+        setIsSharing(false);
+        return;
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.warn("Web Share failed, attempting fallback download:", e);
+      } else {
+        setIsSharing(false);
+        return;
+      }
+    } finally {
+      setIsSharing(false);
+    }
+
+    // Fallback: trigger standard download anchor
+    const a = document.createElement('a');
+    a.href = readyVideo.url;
+    a.download = readyVideo.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
       recorder.start();
       
@@ -2079,6 +2163,105 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </svg>
             <span>Instagram / TikTok (HD MP4)</span>
         </button>
+      )}
+
+      {readyVideo && !isReadyModalOpen && (
+        <button
+          onClick={() => setIsReadyModalOpen(true)}
+          className="mt-3 w-full max-w-[300px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-bold py-2.5 px-4 rounded-2xl text-xs shadow-lg transition flex items-center justify-center gap-2 active:scale-95"
+        >
+          <span className="text-base">🎉</span>
+          <span>Tayyor videoni ochish va saqlash</span>
+        </button>
+      )}
+
+      {/* 🎉 Instagram & Mobile Ready Video Modal */}
+      {isReadyModalOpen && readyVideo && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-sm w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎉</span>
+                <h3 className="text-base font-extrabold text-white">Videongiz Tayyor!</h3>
+              </div>
+              <button
+                onClick={() => setIsReadyModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg text-lg transition"
+                title="Yopish"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Video Player Preview */}
+            <div className="relative rounded-2xl overflow-hidden bg-black border border-slate-800 aspect-[9/16] max-h-[380px] flex items-center justify-center mx-auto shadow-inner">
+              <video
+                src={readyVideo.url}
+                controls
+                playsInline
+                autoPlay
+                loop
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-2 pt-1">
+              <button
+                onClick={handleShareOrSave}
+                disabled={isSharing}
+                className="w-full bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white font-extrabold py-3.5 px-4 rounded-2xl shadow-xl shadow-emerald-500/20 transition flex items-center justify-center gap-2 active:scale-95 text-sm"
+              >
+                <span className="text-base">📲</span>
+                <span>{isSharing ? "Yuklanmoqda..." : "Galereyaga Saqlash / Ulashish"}</span>
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <a
+                  href={readyVideo.url}
+                  download={readyVideo.fileName}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5"
+                >
+                  <span>⬇️</span>
+                  <span>Yuklab olish</span>
+                </a>
+                <button
+                  onClick={() => window.open(readyVideo.url, '_blank')}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold py-2.5 px-3 rounded-xl text-xs text-center transition flex items-center justify-center gap-1.5"
+                >
+                  <span>↗️</span>
+                  <span>Yangi oynada</span>
+                </button>
+              </div>
+            </div>
+
+            {/* In-App / Instagram Instruction Card */}
+            <div className="bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-amber-500/10 border border-pink-500/30 rounded-2xl p-3.5 space-y-2 text-left">
+              <div className="flex items-center gap-1.5 text-pink-300 font-bold text-xs">
+                <span>💡</span>
+                <span>Instagram / Telefon foydalanuvchilariga:</span>
+              </div>
+              <ul className="text-[11px] text-slate-300 space-y-1.5 pl-3 border-l-2 border-pink-500/40 leading-relaxed">
+                <li>
+                  <strong>1-usul:</strong> Yashil <strong>"📲 Galereyaga Saqlash"</strong> tugmasini bosing va menyudan <em>"Videoni saqlash" (Save Video)</em> ni tanlang.
+                </li>
+                <li>
+                  <strong>2-usul:</strong> Videoning ustiga <strong>2 soniya bosib turing</strong> (Long-press) va chiqqan menyudan <em>"Videoni saqlash"</em> ni bosing.
+                </li>
+                <li>
+                  <strong>3-usul:</strong> Agar Instagram ichida yuklanmasa, yuqori o'ngdagi <strong>(⋯) uch nuqta</strong>ni bosib <em>"Brauzerda ochish" (Safari / Chrome)</em> ni tanlang.
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setIsReadyModalOpen(false)}
+              className="w-full py-2 text-xs text-slate-400 hover:text-white transition text-center font-medium"
+            >
+              Yopish
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
