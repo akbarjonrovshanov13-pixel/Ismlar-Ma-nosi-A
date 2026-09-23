@@ -45,6 +45,7 @@ interface MotionVector {
     endX: number;
     endY: number;
     endScale: number;
+    focusY?: number;
 }
 
 interface ProcessedImageLayer {
@@ -60,6 +61,10 @@ interface Particle {
     speedY: number;
     speedX: number;
     opacity: number;
+    phase: number;
+    color: string;
+    pulseSpeed: number;
+    isSparkle?: boolean;
 }
 
 const OUTRO_DURATION = 9.0; // 9 seconds for Luxe Core branding & advert showcase
@@ -436,16 +441,21 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
     initAudio();
     
-    // Initialize particles
+    // Initialize rich golden particles & shimmering dust
     const particles: Particle[] = [];
-    for (let i = 0; i < 60; i++) {
+    const goldPalette = ['#ffffff', '#fef08a', '#fbbf24', '#f59e0b', '#d97706'];
+    for (let i = 0; i < 75; i++) {
         particles.push({
             x: Math.random() * WIDTH,
             y: Math.random() * HEIGHT,
-            size: Math.random() * 3 + 1,
-            speedY: Math.random() * -3 - 1,
-            speedX: Math.random() * 2 - 1,
-            opacity: Math.random() * 0.5 + 0.1
+            size: Math.random() * 3.5 + 1.2,
+            speedY: Math.random() * -2.2 - 0.8,
+            speedX: (Math.random() - 0.5) * 1.4,
+            opacity: Math.random() * 0.6 + 0.25,
+            phase: Math.random() * Math.PI * 2,
+            color: goldPalette[Math.floor(Math.random() * goldPalette.length)],
+            pulseSpeed: Math.random() * 3.5 + 2.0,
+            isSparkle: Math.random() > 0.60
         });
     }
     particlesRef.current = particles;
@@ -494,51 +504,44 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
             const maxOffsetX = BUFFER_W - WIDTH;
             const maxOffsetY = BUFFER_H - HEIGHT;
-            const motionType = index % 8; 
             const transitionType = index % 5;
 
-            let startX = 0, startY = 0, startScale = 1.0;
-            let endX = 0, endY = 0, endScale = 1.15; 
+            // Name frames: Frame 0 (intro hook) and Frame 3 / last frame (climax outro)
+            const isNameFrame = (index === 0 || index === (images.length - 1) || index === 3);
 
-            // Motion Logic (Dynamic Ken Burns)
-            switch (motionType) {
-                case 0: // Pan Right
-                    startX = 0; startY = -maxOffsetY / 2; startScale = 1.05; 
-                    endX = -maxOffsetX; endY = -maxOffsetY / 2; endScale = 1.05;
-                    break;
-                case 1: // Zoom In
-                    startX = -maxOffsetX / 2; startY = -maxOffsetY / 2; startScale = 1.0;
-                    endX = -maxOffsetX / 2; endY = -maxOffsetY / 2; endScale = 1.25; 
-                    break;
-                case 2: // Pan Left
-                    startX = -maxOffsetX; startY = -maxOffsetY / 2; startScale = 1.05;
-                    endX = 0; endY = -maxOffsetY / 2; endScale = 1.05;
-                    break;
-                case 3: // Pan Down
-                    startX = -maxOffsetX / 2; startY = 0; startScale = 1.05;
-                    endX = -maxOffsetX / 2; endY = -maxOffsetY; endScale = 1.15;
-                    break;
-                case 4: // Zoom Out
-                    startX = -maxOffsetX / 2; startY = -maxOffsetY / 2; startScale = 1.25;
-                    endX = -maxOffsetX / 2; endY = -maxOffsetY / 2; endScale = 1.0; 
-                    break;
-                case 5: // Diagonal Top-Left to Bottom-Right
-                    startX = 0; startY = 0; startScale = 1.1;
-                    endX = -maxOffsetX; endY = -maxOffsetY; endScale = 1.1;
-                    break;
-                case 6: // Pan Up
-                    startX = -maxOffsetX / 2; startY = -maxOffsetY; startScale = 1.15;
-                    endX = -maxOffsetX / 2; endY = 0; endScale = 1.05;
-                    break;
-                case 7: // Diagonal Bottom-Right to Top-Left
-                    startX = -maxOffsetX; startY = -maxOffsetY; startScale = 1.1;
-                    endX = 0; endY = 0; endScale = 1.1;
-                    break;
+            let startX = 0, startY = 0, startScale = 1.0;
+            let endX = 0, endY = 0, endScale = 1.15;
+            let focusY = HEIGHT * 0.42;
+
+            if (isNameFrame) {
+                if (index === 0) {
+                    // Majestic, slow, cinematic push-in toward the 3D name art sculpture
+                    startX = -maxOffsetX / 2; startY = -maxOffsetY * 0.35; startScale = 1.0;
+                    endX = -maxOffsetX / 2; endY = -maxOffsetY * 0.35; endScale = 1.20;
+                    focusY = HEIGHT * 0.42;
+                } else {
+                    // Triumphant outro zoom-in & gentle rising camera toward the horizon name
+                    startX = -maxOffsetX / 2; startY = -maxOffsetY * 0.45; startScale = 1.02;
+                    endX = -maxOffsetX / 2; endY = -maxOffsetY * 0.28; endScale = 1.22;
+                    focusY = HEIGHT * 0.42;
+                }
+            } else {
+                // Atmospheric scenery frames: smooth horizontal cinematic panning & drift
+                focusY = HEIGHT / 2;
+                if (index % 2 === 1) {
+                    // Pan left to right with gentle scale
+                    startX = -maxOffsetX * 0.85; startY = -maxOffsetY / 2; startScale = 1.08;
+                    endX = -maxOffsetX * 0.15; endY = -maxOffsetY / 2; endScale = 1.13;
+                } else {
+                    // Pan right to left with gentle scale
+                    startX = -maxOffsetX * 0.15; startY = -maxOffsetY / 2; startScale = 1.13;
+                    endX = -maxOffsetX * 0.85; endY = -maxOffsetY / 2; endScale = 1.08;
+                }
             }
 
             resolve({
                 canvas: offCanvas,
-                motion: { startX, startY, startScale, endX, endY, endScale },
+                motion: { startX, startY, startScale, endX, endY, endScale, focusY },
                 transitionType
             });
           };
@@ -684,7 +687,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const drawLayer = useCallback((ctx: CanvasRenderingContext2D, layer: ProcessedImageLayer, progress: number, opacity: number) => {
     const { canvas, motion } = layer;
-    const { startX, startY, startScale, endX, endY, endScale } = motion;
+    const { startX, startY, startScale, endX, endY, endScale, focusY = HEIGHT / 2 } = motion;
 
     // Sinusoidal ease-in-out curve for cinematic, organic camera motion
     const p = Math.max(0, Math.min(1, progress));
@@ -698,9 +701,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     ctx.save();
     ctx.globalAlpha = opacity;
-    ctx.translate(WIDTH / 2, HEIGHT / 2);
+    ctx.translate(WIDTH / 2, focusY);
     ctx.scale(currentScale, currentScale);
-    ctx.translate(-WIDTH / 2, -HEIGHT / 2);
+    ctx.translate(-WIDTH / 2, -focusY);
     ctx.drawImage(canvas, currentX, currentY);
     ctx.restore();
   }, [BUFFER_W, BUFFER_H]); 
@@ -1003,31 +1006,124 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     // Add Vignette for cinematic look
-    const gradient = ctx.createRadialGradient(WIDTH / 2, HEIGHT / 2, HEIGHT * 0.3, WIDTH / 2, HEIGHT / 2, HEIGHT * 0.8);
+    const gradient = ctx.createRadialGradient(WIDTH / 2, HEIGHT / 2, HEIGHT * 0.3, WIDTH / 2, HEIGHT / 2, HEIGHT * 0.85);
     gradient.addColorStop(0, 'rgba(0,0,0,0)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0.6)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0.65)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Draw Particles
-    ctx.fillStyle = 'white';
+    // --- Golden Sparks & Particle FX (Yaltirash va Uchqunlar) ---
+    const isNameSlide = (currentIndex === 0 || currentIndex === 3 || totalImages <= 2);
+
+    // 1. Soft breathing volumetric golden aura behind the 3D name art
+    if (isNameSlide) {
+      const auraPulse = 0.88 + 0.12 * Math.sin(time * 2.5);
+      const auraGrad = ctx.createRadialGradient(
+        WIDTH / 2, HEIGHT * 0.42, 25,
+        WIDTH / 2, HEIGHT * 0.42, 450 * auraPulse
+      );
+      auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.20)');
+      auraGrad.addColorStop(0.35, 'rgba(251, 191, 36, 0.12)');
+      auraGrad.addColorStop(0.70, 'rgba(217, 119, 6, 0.04)');
+      auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.save();
+      ctx.fillStyle = auraGrad;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      ctx.restore();
+    }
+
+    // 2. Rich floating golden dust, embers & sparkling particles
     particlesRef.current.forEach(p => {
-        ctx.globalAlpha = p.opacity;
+        const flicker = 0.65 + 0.35 * Math.sin(time * p.pulseSpeed + p.phase);
+        const alpha = Math.min(1, Math.max(0, p.opacity * flicker));
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = p.size * 3.5;
+
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
-        
-        // Update
+
+        // Mini sparkle cross on glittering particles
+        if (p.isSparkle && p.size > 2.0 && flicker > 0.82) {
+            const s = p.size * 2.2;
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#fef08a';
+            ctx.shadowBlur = 8;
+            ctx.fillRect(p.x - s, p.y - 0.75, s * 2, 1.5);
+            ctx.fillRect(p.x - 0.75, p.y - s, 1.5, s * 2);
+        }
+        ctx.restore();
+
+        // Organic physics: gentle upward drift with soft horizontal sine-wave breeze
         p.y += p.speedY;
-        p.x += p.speedX;
-        if (p.y < 0) {
-            p.y = HEIGHT;
+        p.x += p.speedX + Math.sin(time * 1.6 + p.phase) * 0.65;
+
+        if (p.y < -20) {
+            p.y = HEIGHT + 15;
             p.x = Math.random() * WIDTH;
         }
-        if (p.x < 0) p.x = WIDTH;
-        if (p.x > WIDTH) p.x = 0;
+        if (p.x < -20) p.x = WIDTH + 10;
+        if (p.x > WIDTH + 20) p.x = -10;
     });
-    ctx.globalAlpha = 1;
+
+    // 3. Twinkling Starburst Flares directly across the 3D name typography
+    if (isNameSlide) {
+      const glints = [
+        { x: WIDTH * 0.35, y: HEIGHT * 0.40, phase: 0.0, baseSize: 15 },
+        { x: WIDTH * 0.65, y: HEIGHT * 0.38, phase: 2.1, baseSize: 17 },
+        { x: WIDTH * 0.50, y: HEIGHT * 0.43, phase: 4.2, baseSize: 19 },
+        { x: WIDTH * 0.26, y: HEIGHT * 0.42, phase: 1.3, baseSize: 14 },
+        { x: WIDTH * 0.74, y: HEIGHT * 0.41, phase: 3.4, baseSize: 16 },
+      ];
+
+      glints.forEach(g => {
+        const wave = Math.sin(time * 3.4 + g.phase);
+        if (wave > 0.25) {
+          const intensity = (wave - 0.25) / 0.75; // 0 to 1
+          const glintSize = g.baseSize * (0.6 + 0.4 * intensity);
+          const glintAlpha = Math.min(1, intensity * 1.3);
+          const rotAngle = (time * 0.75 + g.phase);
+
+          ctx.save();
+          ctx.translate(g.x, g.y);
+          ctx.rotate(rotAngle);
+          ctx.globalAlpha = glintAlpha;
+          ctx.shadowColor = '#fef08a';
+          ctx.shadowBlur = 18;
+          ctx.fillStyle = '#ffffff';
+
+          // Horizontal diamond beam
+          ctx.beginPath();
+          ctx.ellipse(0, 0, glintSize * 2.5, glintSize * 0.26, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Vertical diamond beam
+          ctx.beginPath();
+          ctx.ellipse(0, 0, glintSize * 0.26, glintSize * 2.5, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Diagonal soft secondary glints
+          ctx.rotate(Math.PI / 4);
+          ctx.globalAlpha = glintAlpha * 0.55;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, glintSize * 1.4, glintSize * 0.2, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 0, glintSize * 0.2, glintSize * 1.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Brilliant central core
+          ctx.globalAlpha = glintAlpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, glintSize * 0.45, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.restore();
+        }
+      });
+    }
 
     // --- Subtitles ---
     const activeSubtitle = preparedSubtitles.find(s => time >= s.start && time < s.end);
