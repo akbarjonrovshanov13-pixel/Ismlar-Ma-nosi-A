@@ -67,7 +67,7 @@ const VOICE_MAP: Record<VoiceType, string> = {
 };
 
 export const generateAudio = async (text: string, voiceType: VoiceType): Promise<string> => {
-  // Backend serverless endpoint orqali (gemini-3.1-flash-tts-preview)
+  // Backend serverless endpoint orqali (gemini-3.8-flash-tts / gemini-3.8-flash-lite-tts)
   try {
     const voiceName = VOICE_MAP[voiceType] || "Kore";
     const res = await fetch(`${API_BASE}/generate-audio.js`, {
