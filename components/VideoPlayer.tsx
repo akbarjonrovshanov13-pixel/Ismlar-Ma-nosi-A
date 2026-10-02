@@ -268,40 +268,63 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const left = buffer.getChannelData(0);
     const right = buffer.getChannelData(1);
 
+    // Filter state for noise smoothing (eliminates harsh white noise)
+    let lpNoiseL = 0;
+
     if (style === 'sharqona') {
-      // 🕌 Sharqona / Sufiyona (Hijaz scale)
-      const droneFreq = 73.42; // D2 sub drone
+      // 🕌 Sharqona / Sufiyona (Warm Hijaz ambient & Frame Drum)
       const scale = [146.83, 155.56, 185.00, 196.00, 220.00, 233.08, 261.63, 293.66];
       for (let i = 0; i < frameCount; i++) {
         const t = i / sampleRate;
-        const droneLfo = 0.6 + 0.4 * Math.sin(2 * Math.PI * 0.15 * t);
-        const drone = (Math.sin(2 * Math.PI * droneFreq * t) * 0.35 + Math.sin(2 * Math.PI * droneFreq * 2 * t) * 0.15) * droneLfo;
-        const noteStep = Math.floor(t * 3.5);
-        const noteIdx = (noteStep * 3 + Math.floor(t * 0.7)) % scale.length;
+
+        // Warm ambient pad (D3 + A3 + D4 harmonics)
+        const droneLfo = 0.7 + 0.3 * Math.sin(2 * Math.PI * 0.12 * t);
+        const padD = Math.sin(2 * Math.PI * 146.83 * t) * 0.18;
+        const padA = Math.sin(2 * Math.PI * 220.00 * t) * 0.12;
+        const padOct = Math.sin(2 * Math.PI * 293.66 * t) * 0.06;
+        const drone = (padD + padA + padOct) * droneLfo;
+
+        // Pluck melody with smooth attack to prevent clicking transitions
+        const noteStep = Math.floor(t * 2.5);
+        const noteIdx = (noteStep * 3 + Math.floor(t * 0.5)) % scale.length;
         const freq = scale[noteIdx];
-        const noteT = (t * 3.5) % 1.0;
-        const env = Math.exp(-4.0 * noteT);
-        const wave = (Math.sin(2 * Math.PI * freq * t) * 0.3 + 0.15 * Math.sin(2 * Math.PI * freq * 2 * t)) * env;
+        const noteT = (t * 2.5) % 1.0;
+        const attack = Math.min(1.0, noteT * 30.0);
+        const decay = Math.exp(-3.5 * noteT);
+        const env = attack * decay;
+        const wave = (Math.sin(2 * Math.PI * freq * t) * 0.22 + 0.08 * Math.sin(2 * Math.PI * freq * 2 * t)) * env;
+
+        // Warm frame drum / daf (period = 0.6s) - pitch drop depends ONLY on beatT, zero absolute t dependency!
         const beatT = t % 0.6;
         const isKick = (Math.floor(t / 0.6) % 2 === 0);
+
+        // Low-pass filtered noise for smooth, natural shaker percussion (no harsh white noise)
+        const rawNoise = Math.random() * 2.0 - 1.0;
+        lpNoiseL += 0.25 * (rawNoise - lpNoiseL);
+
         let drum = 0;
         if (isKick) {
-          drum = Math.sin(2 * Math.PI * 65.0 * Math.exp(-8.0 * beatT) * t) * Math.exp(-12.0 * beatT) * 0.30;
+          const kickPhase = 2 * Math.PI * (45.0 * beatT + 35.0 * (1.0 - Math.exp(-25.0 * beatT)) / 25.0);
+          drum = Math.sin(kickPhase) * Math.exp(-12.0 * beatT) * 0.25;
         } else {
-          drum = (Math.random() * 2 - 1) * Math.exp(-25.0 * beatT) * 0.12;
+          drum = lpNoiseL * Math.exp(-30.0 * beatT) * 0.08;
         }
-        const panL = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.2 * t);
+
+        const panL = 0.5 + 0.3 * Math.sin(2 * Math.PI * 0.15 * t);
         const panR = 1.0 - panL;
-        let sampleL = drone * 0.4 + wave * panL * 0.5 + drum * 0.3;
-        let sampleR = drone * 0.4 + wave * panR * 0.5 + drum * 0.3;
+
+        let sampleL = drone * 0.35 + wave * panL * 0.45 + drum * 0.25;
+        let sampleR = drone * 0.35 + wave * panR * 0.45 + drum * 0.25;
+
         let envM = 1.0;
         if (t < 2.0) envM = t / 2.0;
         if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
-        left[i] = Math.max(-1, Math.min(1, sampleL * 0.75 * envM));
-        right[i] = Math.max(-1, Math.min(1, sampleR * 0.75 * envM));
+
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
       }
     } else if (style === 'kinematik') {
-      // 🎹 Kinematik & Hissiyotli Piano
+      // 🎹 Kinematik & Hissiyotli Piano (Lush chords & warm sub-kick)
       const chords = [
         [130.81, 155.56, 196.00, 233.08], // Cm7
         [103.83, 130.81, 155.56, 196.00], // Abmaj7
@@ -312,84 +335,108 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const t = i / sampleRate;
         const chordIdx = Math.floor(t / 4.0) % chords.length;
         const chord = chords[chordIdx];
+
         const arpStep = Math.floor(t * 4.0);
         const arpNote = chord[arpStep % chord.length] * 2.0;
         const arpT = (t * 4.0) % 1.0;
-        const arpEnv = Math.exp(-5.0 * arpT);
-        const pianoSample = Math.sin(2 * Math.PI * arpNote * t) * arpEnv * 0.35;
+        const arpAttack = Math.min(1.0, arpT * 25.0);
+        const arpEnv = arpAttack * Math.exp(-4.5 * arpT);
+        const pianoSample = (Math.sin(2 * Math.PI * arpNote * t) * 0.25 + Math.sin(2 * Math.PI * arpNote * 2 * t) * 0.08) * arpEnv;
+
         let padL = 0, padR = 0;
         chord.forEach((f, idx) => {
           const lfo = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.1 * t + idx);
-          const s = Math.sin(2 * Math.PI * f * t) * 0.15;
+          const s = Math.sin(2 * Math.PI * f * t) * 0.10;
           padL += s * lfo;
           padR += s * (1 - lfo);
         });
+
+        // Warm sub kick - phase strictly within beatT
         const beatT = t % 1.0;
-        const kick = Math.sin(2 * Math.PI * 55 * Math.exp(-10 * beatT) * t) * Math.exp(-15 * beatT) * 0.25;
-        let sampleL = pianoSample * 0.5 + padL * 0.4 + kick * 0.3;
-        let sampleR = pianoSample * 0.5 + padR * 0.4 + kick * 0.3;
+        const kickPhase = 2 * Math.PI * (40.0 * beatT + 30.0 * (1.0 - Math.exp(-20.0 * beatT)) / 20.0);
+        const kick = Math.sin(kickPhase) * Math.exp(-10.0 * beatT) * 0.20;
+
+        let sampleL = pianoSample * 0.5 + padL * 0.4 + kick * 0.25;
+        let sampleR = pianoSample * 0.5 + padR * 0.4 + kick * 0.25;
+
         let envM = 1.0;
         if (t < 2.0) envM = t / 2.0;
         if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
-        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
-        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.65 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.65 * envM));
       }
     } else if (style === 'osuda') {
-      // 🌿 Osuda Ambient
+      // 🌿 Osuda Ambient (Serene Singing Bowls & Chimes)
       const scale = [174.61, 196.00, 220.00, 261.63, 293.66, 349.23];
       for (let i = 0; i < frameCount; i++) {
         const t = i / sampleRate;
         const lfo1 = 0.5 + 0.5 * Math.sin(2 * Math.PI * 0.08 * t);
         const lfo2 = 0.5 + 0.5 * Math.cos(2 * Math.PI * 0.08 * t);
-        const pad1 = Math.sin(2 * Math.PI * 174.61 * t) * 0.25;
-        const pad2 = Math.sin(2 * Math.PI * 220.00 * t) * 0.20;
-        const pad3 = Math.sin(2 * Math.PI * 261.63 * t) * 0.20;
+        const pad1 = Math.sin(2 * Math.PI * 174.61 * t) * 0.18;
+        const pad2 = Math.sin(2 * Math.PI * 220.00 * t) * 0.14;
+        const pad3 = Math.sin(2 * Math.PI * 261.63 * t) * 0.14;
+
         const chimeT = t % 2.5;
         const chimeNote = scale[Math.floor(t / 2.5) % scale.length] * 2.0;
-        const chimeEnv = Math.exp(-3.0 * chimeT);
-        const chime = Math.sin(2 * Math.PI * chimeNote * t) * chimeEnv * 0.25;
+        const chimeAttack = Math.min(1.0, chimeT * 30.0);
+        const chimeEnv = chimeAttack * Math.exp(-2.5 * chimeT);
+        const chime = Math.sin(2 * Math.PI * chimeNote * t) * chimeEnv * 0.22;
+
         let sampleL = (pad1 + pad2) * lfo1 * 0.5 + chime * 0.4;
         let sampleR = (pad1 + pad3) * lfo2 * 0.5 + chime * 0.4;
+
         let envM = 1.0;
         if (t < 2.0) envM = t / 2.0;
         if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
-        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
-        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.65 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.65 * envM));
       }
     } else {
-      // ⚡ Zamonaviy Lofi Beat
+      // ⚡ Zamonaviy Lofi Beat (Warm Rhodes & Soft Beats)
+      const chords = [
+        [174.61, 220.00, 261.63, 329.63],
+        [146.83, 174.61, 220.00, 261.63],
+        [220.00, 261.63, 329.63, 392.00]
+      ];
       for (let i = 0; i < frameCount; i++) {
         const t = i / sampleRate;
         const beatT = t % 0.6;
         const step = Math.floor(t / 0.6) % 8;
+
+        const rawNoise = Math.random() * 2.0 - 1.0;
+        lpNoiseL += 0.3 * (rawNoise - lpNoiseL);
+
         let kick = 0;
         if (step === 0 || step === 3) {
-          kick = Math.sin(2 * Math.PI * 60 * Math.exp(-12 * beatT) * t) * Math.exp(-10 * beatT) * 0.35;
+          const kickPhase = 2 * Math.PI * (50.0 * beatT + 35.0 * (1.0 - Math.exp(-25.0 * beatT)) / 25.0);
+          kick = Math.sin(kickPhase) * Math.exp(-10.0 * beatT) * 0.25;
         }
+
         let snare = 0;
         if (step === 2 || step === 6) {
-          snare = (Math.random() * 2 - 1) * Math.exp(-20 * beatT) * 0.25;
+          snare = lpNoiseL * Math.exp(-18.0 * beatT) * 0.15;
         }
+
         const subBeatT = t % 0.3;
-        const hihat = (Math.random() * 2 - 1) * Math.exp(-40 * subBeatT) * 0.08;
-        const chords = [
-          [174.61, 220.00, 261.63, 329.63],
-          [146.83, 174.61, 220.00, 261.63],
-          [220.00, 261.63, 329.63, 392.00]
-        ];
+        const hihat = lpNoiseL * Math.exp(-35.0 * subBeatT) * 0.05;
+
         const currentChord = chords[Math.floor(t / 2.4) % chords.length];
         let chordSample = 0;
         currentChord.forEach(f => {
-          chordSample += Math.sin(2 * Math.PI * f * t) * 0.08;
+          chordSample += Math.sin(2 * Math.PI * f * t) * 0.06;
         });
-        const vinyl = (Math.random() * 2 - 1) * 0.015;
-        let sampleL = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4 + vinyl;
-        let sampleR = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4 + vinyl;
+
+        let sampleL = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4;
+        let sampleR = kick * 0.4 + snare * 0.3 + hihat * 0.2 + chordSample * 0.4;
+
         let envM = 1.0;
         if (t < 2.0) envM = t / 2.0;
         if (t > safeDuration - 2.0) envM = Math.max(0, (safeDuration - t) / 2.0);
-        left[i] = Math.max(-1, Math.min(1, sampleL * 0.70 * envM));
-        right[i] = Math.max(-1, Math.min(1, sampleR * 0.70 * envM));
+
+        left[i] = Math.max(-1, Math.min(1, sampleL * 0.65 * envM));
+        right[i] = Math.max(-1, Math.min(1, sampleR * 0.65 * envM));
       }
     }
 
@@ -1558,11 +1605,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     stopPreviewBgm();
 
+    // Master Limiter / Compressor to avoid any clipping or speaker distortion
+    const previewComp = ctx.createDynamicsCompressor();
+    previewComp.threshold.setValueAtTime(-1.5, ctx.currentTime);
+    previewComp.knee.setValueAtTime(6, ctx.currentTime);
+    previewComp.ratio.setValueAtTime(12, ctx.currentTime);
+    previewComp.attack.setValueAtTime(0.003, ctx.currentTime);
+    previewComp.release.setValueAtTime(0.20, ctx.currentTime);
+
+    const previewMasterGain = ctx.createGain();
+    previewMasterGain.gain.setValueAtTime(0.92, ctx.currentTime);
+
+    previewComp.connect(previewMasterGain);
+    previewMasterGain.connect(ctx.destination);
+
     // 1. Speech Audio
     const speechSource = ctx.createBufferSource();
     speechSource.buffer = buf;
     speechSource.playbackRate.value = speed;
-    speechSource.connect(ctx.destination);
+    speechSource.connect(previewComp);
     const bufferOffset = Math.min(Math.max(0, buf.duration - 0.05), Math.max(0, offset * speed));
     speechSource.start(0, bufferOffset);
     speechSourceRef.current = speechSource;
@@ -1576,7 +1637,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const bgmGain = ctx.createGain();
       bgmGain.gain.value = bgmVolume;
       bgmSource.connect(bgmGain);
-      bgmGain.connect(ctx.destination);
+      bgmGain.connect(previewComp);
       const bgmOffset = offset % activeBgm.duration;
       bgmSource.start(0, bgmOffset);
       bgmSourceRef.current = bgmSource;
@@ -1751,11 +1812,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       const dest = recCtx.createMediaStreamDestination();
       
+      // Master Limiter / Compressor to eliminate 100% of clipping & distortion during export
+      const exportComp = recCtx.createDynamicsCompressor();
+      exportComp.threshold.setValueAtTime(-1.5, 0);
+      exportComp.knee.setValueAtTime(6, 0);
+      exportComp.ratio.setValueAtTime(12, 0);
+      exportComp.attack.setValueAtTime(0.003, 0);
+      exportComp.release.setValueAtTime(0.20, 0);
+
+      const exportMasterGain = recCtx.createGain();
+      exportMasterGain.gain.setValueAtTime(0.92, 0);
+
+      exportComp.connect(exportMasterGain);
+      exportMasterGain.connect(dest);
+
       // 1. Speech Audio
       const speechSource = recCtx.createBufferSource();
       speechSource.buffer = buf;
       speechSource.playbackRate.value = currentSpeed;
-      speechSource.connect(dest);
+      speechSource.connect(exportComp);
       speechSource.start(0);
 
       // 2. Background Music Mixing (if enabled) with Smart Ducking
@@ -1776,7 +1851,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         });
 
         bgmSource.connect(bgmGain);
-        bgmGain.connect(dest);
+        bgmGain.connect(exportComp);
         bgmSource.start(0);
       }
       
