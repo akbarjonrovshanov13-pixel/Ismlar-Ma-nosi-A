@@ -92,16 +92,33 @@ export const generateImages = async (
   gender?: string
 ): Promise<string[]> => {
   const validPrompts = (prompts && prompts.length > 0) ? prompts.slice(0, 4) : [topic || "Ism"];
+  const totalFrames = validPrompts.length;
   const finalImages: string[] = [];
 
+  // Pick 2 completely distinct random concepts for the 2 typography frames (Frame 0 and the final frame)
+  const poolSize = 16;
+  const conceptA = Math.floor(Math.random() * poolSize);
+  let conceptB = (conceptA + 1 + Math.floor(Math.random() * (poolSize - 1))) % poolSize;
+
   // Generate each frame individually: ~6-8s per frame, payload <2MB, completely immune to Vercel timeouts!
-  for (let i = 0; i < validPrompts.length; i++) {
-    if (onProgress) onProgress(i + 1, validPrompts.length);
+  for (let i = 0; i < totalFrames; i++) {
+    if (onProgress) onProgress(i + 1, totalFrames);
     try {
+      const isNameArt = (i === 0 || i === totalFrames - 1);
+      const chosenConcept = i === 0 ? conceptA : conceptB;
       const res = await fetch(`${API_BASE}/generate-images.js`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: validPrompts[i], topic, frameIndex: i, gender }),
+        body: JSON.stringify({
+          prompt: validPrompts[i],
+          topic,
+          frameIndex: i,
+          totalFrames,
+          isNameArt,
+          conceptIndex: chosenConcept,
+          gender,
+          seed: Math.floor(Math.random() * 10000000)
+        }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -125,7 +142,7 @@ export const generateImages = async (
     const res = await fetch(`${API_BASE}/generate-images.js`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompts: validPrompts, topic, gender }),
+      body: JSON.stringify({ prompts: validPrompts, topic, gender, conceptA, conceptB }),
     });
     if (res.ok) {
       const data = await res.json();

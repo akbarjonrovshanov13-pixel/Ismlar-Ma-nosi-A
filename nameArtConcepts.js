@@ -73,6 +73,48 @@ export const NAME_ART_CONCEPTS = [
     typography: "towering translucent arctic glacial display typography with crisp chiseled frost edges, crystalline facets, and majestic vertical scale",
     art: "Towering translucent iceberg typography sculpted from crystalline arctic glacier ice, illuminated from within by the vibrant dancing green and sapphire lights of the Aurora Borealis (Northern Lights). Crisp snowy mist, starry night sky, frozen masterpiece"
   },
+  {
+    id: "samarkand",
+    label: "Silk Road & Samarkand Majolica",
+    uz: "Qadimiy Samarqand Koshini",
+    typography: "ornate eastern regal architectural typography inspired by Timurid calligraphy, with golden borders and deep lapis lazuli inlays",
+    art: "Magnificent 3D typography carved from azure glazed majolica ceramics and turquoise glazed tiles with intricate 24k gold filigree geometric arabesques. Ambient lantern glow, ancient Bukhara silk backdrop, timeless Silk Road grandeur"
+  },
+  {
+    id: "dune",
+    label: "Golden Desert Dunes & Mirage",
+    uz: "Sahro Oltin Barxanlari",
+    typography: "flowing aerodynamic sculptural sand-dune typography with smooth wind-swept bevels and golden sunlit crests",
+    art: "Monumental golden sandstone and wind-carved desert sculpture typography rising smoothly from pristine golden desert sand dunes at sunset. Low warm golden-hour sun casting long dramatic purple shadows, floating warm sand dust, epic cinematic mirage"
+  },
+  {
+    id: "ocean",
+    label: "Bioluminescent Abyss & Pearl",
+    uz: "Sirli Ummon & Marjon",
+    typography: "fluid oceanic dimensional typography sculpted from polished iridescent abalone shell with flowing aquatic curves",
+    art: "Glowing deep-sea sculptural typography resting on shimmering white coral sand beneath crystal-clear turquoise waters. Bioluminescent cyan and violet marine plankton glow, caustic sunlight ripples refracting through the ocean surface, ethereal tranquility"
+  },
+  {
+    id: "steel",
+    label: "Damascus Steel & Crimson Embers",
+    uz: "Damashq Po'lati & Cho'g'",
+    typography: "forged chiseled Damascus steel typography with intricate folded metal wave patterns and razor-sharp tempered bevels",
+    art: "Heavy forged blackened Damascus steel typography with glowing crimson heat along its bottom bevels, resting on a dark anodized metal slab. Subtle glowing red embers floating through moody cinematic smoke, high-contrast rim lighting, relentless heroic power"
+  },
+  {
+    id: "celestial",
+    label: "Golden Sunburst & Cloud Sanctuary",
+    uz: "Zarrin Shafaq & Nur",
+    typography: "radiant gilded monumental display typography with angelic proportions and luminous polished contours",
+    art: "Radiant 3D typography sculpted from polished honey-amber and polished brass, floating high above a sea of soft fluffy sunset clouds. Blinding golden sunbeams bursting from behind, warm celestial radiance, divine inspiring majestic atmosphere"
+  },
+  {
+    id: "neon_glass",
+    label: "Iridescent Holographic Glass",
+    uz: "Golografik Shisha & Neon",
+    typography: "ultra-modern floating prismatic dichroic glass typography with sharp laser-etched facets and multi-spectral dispersion",
+    art: "Transparent multi-layered dichroic glass typography reflecting kaleidoscopic pastel gradients of lilac, mint, and peach. Floating in a minimalist white-cube gallery with soft pastel neon ambient light, hyper-modern aesthetic"
+  }
 ];
 
 const cleanName = (name) => String(name).trim().toUpperCase().slice(0, 20);

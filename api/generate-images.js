@@ -32,6 +32,31 @@ const detectGender = (name) => {
   return "UNISEX";
 };
 
+const CAMERA_PERSPECTIVES = [
+  "Monumental front-facing eye-level view with aristocratic symmetry and grand vertical presence",
+  "Dramatic cinematic low-angle hero perspective looking upwards, emphasizing majestic monolithic scale",
+  "Cinematic 3/4 angled perspective with rich architectural depth of field and soft focal blur",
+  "Gentle floating weightless perspective with subtle cinematic tilt and generous breathing room",
+  "Dynamic wide-angle cinematic framing with breathtaking spatial depth and sharp environmental clarity"
+];
+
+const LIGHTING_ATMOSPHERES = [
+  "Opulent warm golden volumetric studio god-rays cutting through subtle atmospheric haze, sharp raytraced reflections",
+  "Moody nocturnal luxury ambiance with vivid bioluminescent rim-lights and deep obsidian contrast",
+  "Ethereal dawn horizon sunrise with warm chromatic lens flares and gleaming crystal refractions",
+  "High-end editorial gallery rim-lighting with soft diffused fill and delicate floating ambient dust particles",
+  "Dramatic twilight cinematic atmosphere with luminous starlight reflections and glowing prismatic highlights",
+  "Warm golden-hour side lighting with rich deep shadows, soft amber rim highlights, and crystalline reflections"
+];
+
+const CINEMATIC_AESTHETICS = [
+  "Masterpiece, 8k resolution, IMAX 70mm cinematography, Unreal Engine 5 render, volumetric atmosphere, photorealistic",
+  "Cinematic masterpiece, 8k, award-winning National Geographic cinematography, anamorphic lens flare, shallow depth of field",
+  "Epic cinematic visual, 8k resolution, Hasselblad medium format photography, breathtaking natural lighting, raytraced ambiance",
+  "Masterpiece fine-art cinema visual, 8k, Panavision anamorphic lens, atmospheric misty morning light, hyper-detailed textures",
+  "Breathtaking high-end film still, 8k, ARRI Alexa LF camera, gorgeous natural color grading, volumetric light rays"
+];
+
 export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
@@ -39,16 +64,24 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   try {
-    const { prompts, topic, gender } = req.body || {};
+    const {
+      prompt,
+      prompts,
+      topic,
+      gender,
+      frameIndex,
+      totalFrames,
+      isNameArt,
+      conceptIndex,
+      conceptA,
+      conceptB
+    } = req.body || {};
+
     const validPrompts = (prompts && prompts.length > 0) ? prompts.filter((p) => p?.trim().length > 0).slice(0, 4) : ["Ism"];
     const hasTopic = topic && String(topic).trim().length > 0;
     const effectiveGender = (gender && gender !== 'UNISEX') ? gender : detectGender(topic);
     const genderTone = toneFor(effectiveGender);
-
-    // Pick 4 distinct styles from NAME_ART_CONCEPTS for maximum variety
-    // (e.g. Royal Gold, Cosmic Nebula, Crystal Diamond, Glacial Ice, Emerald Botanical)
-    const shuffledConcepts = [...NAME_ART_CONCEPTS].sort(() => 0.5 - Math.random());
-    const frameConcepts = [0, 1, 2, 3].map(i => shuffledConcepts[i % shuffledConcepts.length]);
+    const totalCount = typeof totalFrames === "number" ? totalFrames : (validPrompts ? validPrompts.length : 4);
 
     let aiAvailable = true;
     try {
@@ -58,45 +91,65 @@ export default async function handler(req, res) {
       aiAvailable = false;
     }
 
-    const buildFramePrompt = (promptText, topicName, frameIndex) => {
+    const determineIsNameArt = (idx) => {
+      if (typeof isNameArt === "boolean") return isNameArt;
+      if (!hasTopic) return false;
+      // Exactly 2 frames: Frame 0 (intro hook) and the final frame (outro/climax)
+      return idx === 0 || idx === Math.max(1, totalCount - 1);
+    };
+
+    const getConceptForFrame = (idx) => {
+      if (typeof conceptIndex === "number" && NAME_ART_CONCEPTS[conceptIndex]) {
+        return NAME_ART_CONCEPTS[conceptIndex];
+      }
+      if (idx === 0 && typeof conceptA === "number" && NAME_ART_CONCEPTS[conceptA]) {
+        return NAME_ART_CONCEPTS[conceptA];
+      }
+      if (idx > 0 && typeof conceptB === "number" && NAME_ART_CONCEPTS[conceptB]) {
+        return NAME_ART_CONCEPTS[conceptB];
+      }
+      const randIdx = (Math.floor(Math.random() * NAME_ART_CONCEPTS.length) + (idx * 7)) % NAME_ART_CONCEPTS.length;
+      return NAME_ART_CONCEPTS[randIdx];
+    };
+
+    const buildFramePrompt = (promptText, topicName, idx) => {
+      const isTypographyFrame = determineIsNameArt(idx);
       const isDetailed = promptText && String(promptText).trim().length > 15;
       const coreScene = isDetailed
         ? String(promptText).replace(/["']/g, "").trim()
-        : SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
+        : SCENE_ENHANCERS[idx % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
 
-      if (hasTopic && frameIndex === 0) {
+      if (hasTopic && isTypographyFrame) {
         const clean = String(topicName).trim().toUpperCase().slice(0, 20);
-        const concept = frameConcepts[0];
+        const concept = getConceptForFrame(idx);
+        const angle = CAMERA_PERSPECTIVES[Math.floor(Math.random() * CAMERA_PERSPECTIVES.length)];
+        const lighting = LIGHTING_ATMOSPHERES[Math.floor(Math.random() * LIGHTING_ATMOSPHERES.length)];
         const sceneContext = promptText && String(promptText).trim().length > 10
-          ? `Thematic scene atmosphere inspired by the name's meaning: ${String(promptText).replace(/["']/g, "").trim()}.`
+          ? `Thematic environmental aura reflecting the name's spirit: ${String(promptText).replace(/["']/g, "").trim()}.`
           : "";
 
         return `Vertical 9:16 smartphone wallpaper key visual. Breathtaking personalized 3D typography artwork spelling the exact word "${clean}".
 ${concept.art}.
 ${sceneContext}
+Camera perspective: ${angle}.
+Lighting atmosphere: ${lighting}.
 
 CRITICAL TYPOGRAPHY & SPELLING:
 - The entire word "${clean}" MUST be rendered on a SINGLE HORIZONTAL LINE from left to right.
 - Exact spelling: "${clean}" (${clean.length} Latin letters). All ${clean.length} letters must be sculpted side-by-side on ONE continuous horizontal baseline in magnificent 3D ${concept.typography}, expressing ${genderTone}.
 - Positioned centered in the upper-middle area (between 35% and 55% vertical height) with elegant margins.
 - Keep the bottom 30% of the canvas clean with soft atmospheric background and ambient light so video subtitles can be displayed with 100% clarity.
-- Masterpiece, 8k resolution, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition luxury aesthetic. The ONLY text visible in the entire image is "${clean}".`;
+- Masterpiece, 8k resolution, ultra-high definition luxury aesthetic. The ONLY text visible in the entire image is "${clean}".`;
       }
 
-      // For frameIndex > 0 or if no name topic provided, generate pure cinematic landscape
-      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. Masterpiece, 8k resolution, cinematic lighting, photorealistic, Unreal Engine 5 render, volumetric atmosphere, shallow depth of field, clean background artwork, no text, no letters, no typography, no watermark.`;
+      // Non-typography frames (Frame 1, 2, etc.): Pure cinematic storytelling scene with STRICT NO TEXT
+      const cinemaStyle = CINEMATIC_AESTHETICS[Math.floor(Math.random() * CINEMATIC_AESTHETICS.length)];
+      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. ${cinemaStyle}. Clean background artwork, atmospheric depth.
+STRICT NEGATIVE CONSTRAINT: NO text, NO letters, NO words, NO typography, NO watermark, NO alphabet symbols. Pure photographic cinematic world.`;
     };
 
     const generateOne = async (p, index) => {
       const enhanced = buildFramePrompt(p, topic, index);
-
-      // Check cache first to avoid redundant API calls
-      const cacheKey = `frame_art:${topic || 'gen'}:${effectiveGender}:${index}:${enhanced.slice(0, 80)}`;
-      const cached = getCachedImage(cacheKey);
-      if (cached) {
-        console.log(`Using cached image for frame index ${index}`);
-        return cached;
-      }
 
       // Alternate primary model between frames to distribute Vertex AI quota, with 2.5-flash-image as resilient 3rd fallback
       const modelOrder = index % 2 === 0
@@ -116,10 +169,8 @@ CRITICAL TYPOGRAPHY & SPELLING:
 
       const part = response.candidates?.[0]?.content?.parts?.find((partItem) => partItem.inlineData);
       if (!part?.inlineData?.data) throw new Error("Rasm ma'lumoti topilmadi");
-      
-      const imgData = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      setCachedImage(cacheKey, imgData);
-      return imgData;
+
+      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
     };
 
     const processFrame = async (p, index) => {
@@ -134,14 +185,24 @@ CRITICAL TYPOGRAPHY & SPELLING:
 
       // If Vertex AI did not produce an image, use Pollinations AI Turbo before static wallpapers
       if (!generated) {
-        const enhanced = buildFramePrompt(p, topic, index);
+        const isTypographyFrame = determineIsNameArt(index);
+        let pollinationsPrompt = "";
+        if (hasTopic && isTypographyFrame) {
+          const clean = String(topic).trim().toUpperCase().slice(0, 20);
+          const concept = getConceptForFrame(index);
+          pollinationsPrompt = `Breathtaking 3D typography spelling "${clean}", sculpted in ${concept.typography}, ${concept.art.slice(0, 150)}, 9:16 smartphone wallpaper, 8k, raytracing`;
+        } else {
+          const isDetailed = p && String(p).trim().length > 15;
+          const coreScene = isDetailed
+            ? String(p).replace(/["']/g, "").trim()
+            : SCENE_ENHANCERS[index % SCENE_ENHANCERS.length](p || "Cinematic landscape");
+          pollinationsPrompt = `${coreScene}, cinematic 9:16 vertical scenery, photorealistic, 8k, no text, no words`;
+        }
 
         try {
-          const pollinationsImg = await fetchPollinationsImage(enhanced, 768, 1344);
+          const pollinationsImg = await fetchPollinationsImage(pollinationsPrompt, 768, 1344);
           if (pollinationsImg) {
             generated = pollinationsImg;
-            const cacheKey = `frame_art:${topic || 'gen'}:${effectiveGender}:${index}:${enhanced.slice(0, 80)}`;
-            setCachedImage(cacheKey, pollinationsImg);
           }
         } catch (pollErr) {
           console.warn(`Pollinations AI failed for frame ${index}:`, pollErr.message);
