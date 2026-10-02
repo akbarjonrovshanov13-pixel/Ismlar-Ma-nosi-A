@@ -59,9 +59,14 @@ export default async function handler(req, res) {
     }
 
     const buildFramePrompt = (promptText, topicName, frameIndex) => {
-      if (hasTopic) {
+      const isDetailed = promptText && String(promptText).trim().length > 15;
+      const coreScene = isDetailed
+        ? String(promptText).replace(/["']/g, "").trim()
+        : SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
+
+      if (hasTopic && frameIndex === 0) {
         const clean = String(topicName).trim().toUpperCase().slice(0, 20);
-        const concept = frameConcepts[frameIndex % frameConcepts.length];
+        const concept = frameConcepts[0];
         const sceneContext = promptText && String(promptText).trim().length > 10
           ? `Thematic scene atmosphere inspired by the name's meaning: ${String(promptText).replace(/["']/g, "").trim()}.`
           : "";
@@ -78,13 +83,8 @@ CRITICAL TYPOGRAPHY & SPELLING:
 - Masterpiece, 8k resolution, dramatic studio lighting, sharp depth of field, raytraced reflections, ultra-high definition luxury aesthetic. The ONLY text visible in the entire image is "${clean}".`;
       }
 
-      // If no name topic provided, generate pure cinematic landscape
-      const isDetailed = promptText && String(promptText).trim().length > 15;
-      const coreScene = isDetailed
-        ? String(promptText).replace(/["']/g, "").trim()
-        : SCENE_ENHANCERS[frameIndex % SCENE_ENHANCERS.length](promptText || "Cinematic landscape");
-
-      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. Masterpiece, 8k resolution, cinematic lighting, photorealistic, Unreal Engine 5 render, volumetric atmosphere, shallow depth of field, clean background artwork, no text, no watermark.`;
+      // For frameIndex > 0 or if no name topic provided, generate pure cinematic landscape
+      return `Vertical 9:16 smartphone wallpaper key visual. ${coreScene}. Masterpiece, 8k resolution, cinematic lighting, photorealistic, Unreal Engine 5 render, volumetric atmosphere, shallow depth of field, clean background artwork, no text, no letters, no typography, no watermark.`;
     };
 
     const generateOne = async (p, index) => {
