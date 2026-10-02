@@ -1,5 +1,5 @@
 import { query, getPool } from "./_db.js";
-import { setCors } from "./_helpers.js";
+import { setCors, verifyAdmin } from "./_helpers.js";
 
 export default async function handler(req, res) {
   setCors(res);
@@ -12,6 +12,9 @@ export default async function handler(req, res) {
 
       // If 'all' is requested, return all users (for Admin modal)
       if (all === "true") {
+        if (!verifyAdmin(req)) {
+          return res.status(403).json({ error: "Ruxsat berilmadi: Admin huquqi talab qilinadi" });
+        }
         const p = await getPool();
         const poolAvailable = Boolean(p);
         const result = await query(
@@ -258,6 +261,9 @@ export default async function handler(req, res) {
 
       // Admin set credits, approval, email or displayName
       if (email !== undefined || displayName !== undefined || typeof credits === "number" || typeof isApproved === "boolean") {
+        if (!verifyAdmin(req)) {
+          return res.status(403).json({ error: "Ruxsat berilmadi: Kredit yoki tasdiqni o'zgartirish uchun admin huquqi talab qilinadi" });
+        }
         const result = await query(
           `UPDATE users 
            SET email = COALESCE(NULLIF($2, ''), email),
@@ -294,6 +300,9 @@ export default async function handler(req, res) {
 
     // 4. DELETE: Admin delete user
     if (req.method === "DELETE") {
+      if (!verifyAdmin(req)) {
+        return res.status(403).json({ error: "Ruxsat berilmadi: Foydalanuvchini o'chirish uchun admin huquqi talab qilinadi" });
+      }
       const { uid } = req.query || req.body || {};
       if (!uid) {
         return res.status(400).json({ error: "uid maydoni kiritilishi shart" });

@@ -12,6 +12,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email.lower() == 'akbarjonrovshanov13@gmail.com') ||
+        request.auth.uid == 'admin_akbarjon'
+      );
+    }
+
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -45,26 +52,55 @@ service cloud.firestore {
 
     // Videos collection
     match /videos/{videoId} {
-      allow read: if isSignedIn();
+      // Users can only read their own videos, unless admin or explicitly public
+      allow read: if isSignedIn() && (
+        isOwner(existing().userId) ||
+        isAdmin() ||
+        (resource.data.isPublic == true)
+      );
       allow create: if isSignedIn() && isValidId(videoId) && isValidVideo(incoming());
-      allow update: if isSignedIn() && isValidId(videoId) && isOwner(existing().userId) && isValidVideo(incoming()) && incoming().userId == existing().userId;
-      allow delete: if isSignedIn() && isValidId(videoId) && isOwner(existing().userId);
+      allow update: if isSignedIn() && isValidId(videoId) && (isOwner(existing().userId) || isAdmin()) && isValidVideo(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(videoId) && (isOwner(existing().userId) || isAdmin());
     }
 
     // User profile collection
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(userId) && isValidId(userId);
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && isOwner(userId);
+      // Users can only read their own profile, or admin can read any profile
+      allow read: if isSignedIn() && (isOwner(userId) || isAdmin());
+      // Users can create their own profile, admin can create any
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (isOwner(userId) && isValidId(userId))
+      );
+      // Users can update their own profile (cannot increase credits or approve themselves), admin has full rights
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          isOwner(userId) &&
+          (!('isApproved' in incoming()) || incoming().isApproved == existing().isApproved) &&
+          (!('totalAllowed' in incoming()) || incoming().totalAllowed == existing().totalAllowed) &&
+          (!('credits' in incoming()) || incoming().credits <= existing().credits)
+        )
+      );
+      allow delete: if isSignedIn() && (isOwner(userId) || isAdmin());
     }
 
     // Payments collection
     match /payments/{paymentId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(paymentId);
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      // Users can only read their own payments, or admin can read all
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        (existing().userId == request.auth.uid)
+      );
+      // Users can only submit new payments with PENDING status for themselves, admin can create any
+      allow create: if isSignedIn() && isValidId(paymentId) && (
+        isAdmin() ||
+        (incoming().userId == request.auth.uid && incoming().status == 'PENDING')
+      );
+      // ONLY Admin can approve, reject or update payments
+      allow update: if isSignedIn() && isAdmin();
+      // ONLY Admin can delete payments
+      allow delete: if isSignedIn() && isAdmin();
     }
   }
 }

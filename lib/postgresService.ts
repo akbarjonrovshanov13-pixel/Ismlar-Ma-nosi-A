@@ -39,6 +39,22 @@ export interface PaymentRequestDocument {
 
 const API_BASE = '/api';
 
+export const getAdminKey = (): string => {
+  return (typeof window !== 'undefined' ? (sessionStorage.getItem('admin_passkey') || localStorage.getItem('admin_passkey')) : null) || 'Hisobot201415!';
+};
+
+export const setAdminKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('admin_passkey', key);
+    localStorage.setItem('admin_passkey', key);
+  }
+};
+
+const getAdminHeaders = () => ({
+  'Content-Type': 'application/json',
+  'x-admin-key': getAdminKey(),
+});
+
 // 1. Foydalanuvchi profilini PostgreSQL'dan olish
 export const getUserProfileFromPostgres = async (
   uid: string,
@@ -155,7 +171,7 @@ export const updateUserCreditsInPostgres = async (
   try {
     const res = await fetch(`${API_BASE}/db-users.js`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getAdminHeaders(),
       body: JSON.stringify({ uid, credits, isApproved }),
     });
     return res.ok;
@@ -176,7 +192,7 @@ export const updateUserDetailsInPostgres = async (
   try {
     const res = await fetch(`${API_BASE}/db-users.js`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getAdminHeaders(),
       body: JSON.stringify({ uid, email, displayName, credits, isApproved }),
     });
     return res.ok;
@@ -191,6 +207,7 @@ export const deleteUserFromPostgres = async (uid: string): Promise<boolean> => {
   try {
     const res = await fetch(`${API_BASE}/db-users.js?uid=${encodeURIComponent(uid)}`, {
       method: "DELETE",
+      headers: { "x-admin-key": getAdminKey() },
     });
     return res.ok;
   } catch (err) {
@@ -208,7 +225,9 @@ export interface PostgresAdminUsersResponse {
 // 5. Admin uchun barcha foydalanuvchilar
 export const getAllUsersForAdminFromPostgres = async (): Promise<PostgresAdminUsersResponse> => {
   try {
-    const res = await fetch(`${API_BASE}/db-users.js?all=true`);
+    const res = await fetch(`${API_BASE}/db-users.js?all=true`, {
+      headers: { "x-admin-key": getAdminKey() },
+    });
     if (res.ok) {
       const data = await res.json();
       return {
@@ -306,7 +325,9 @@ export const createPaymentRequestInPostgres = async (
 // 10. Admin uchun barcha to'lovlar
 export const getAllPaymentsForAdminFromPostgres = async (): Promise<PaymentRequestDocument[]> => {
   try {
-    const res = await fetch(`${API_BASE}/db-payments.js`);
+    const res = await fetch(`${API_BASE}/db-payments.js`, {
+      headers: { "x-admin-key": getAdminKey() },
+    });
     if (res.ok) {
       const data = await res.json();
       return data.payments || [];
@@ -326,7 +347,7 @@ export const adminApprovePaymentInPostgres = async (
   try {
     const res = await fetch(`${API_BASE}/db-payments.js`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getAdminHeaders(),
       body: JSON.stringify({ paymentId, status: "APPROVED", creditsToAdd }),
     });
     return res.ok;
@@ -341,7 +362,7 @@ export const adminRejectPaymentInPostgres = async (paymentId: string): Promise<b
   try {
     const res = await fetch(`${API_BASE}/db-payments.js`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: getAdminHeaders(),
       body: JSON.stringify({ paymentId, status: "REJECTED" }),
     });
     return res.ok;

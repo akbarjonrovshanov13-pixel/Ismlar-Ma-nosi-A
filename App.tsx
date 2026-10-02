@@ -41,6 +41,13 @@ const MAX_USER_IMAGES = 10;
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const isAdmin = Boolean(
+    user && (
+      user.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com' ||
+      user.uid === 'admin_akbarjon'
+    )
+  );
+
   const [topic, setTopic] = useState('');
   const [imageMode, setImageMode] = useState<ImageMode>(ImageMode.GENERATE);
   const [useSearch, setUseSearch] = useState(true);
@@ -64,10 +71,14 @@ const App: React.FC = () => {
   // Script Editor states
   const [isScriptEditorOpen, setIsScriptEditorOpen] = useState(false);
   const [draftSegments, setDraftSegments] = useState<string[]>([]);
-  const [draftOutroText, setDraftOutroText] = useState<string>(DEFAULT_OUTRO_TEXT);
+  const [draftOutroText, setDraftOutroText] = useState<string>('');
   const [draftHashtags, setDraftHashtags] = useState<string[]>([]);
   const [draftImagePrompts, setDraftImagePrompts] = useState<string[]>([]);
   const [isGeneratingScriptOnly, setIsGeneratingScriptOnly] = useState(false);
+
+  useEffect(() => {
+    setDraftOutroText(isAdmin ? DEFAULT_OUTRO_TEXT : '');
+  }, [isAdmin]);
 
   // Firebase Saved Projects, Admin & Ad Settings states
   const [isSavedProjectsOpen, setIsSavedProjectsOpen] = useState(false);
@@ -228,6 +239,7 @@ const App: React.FC = () => {
             isApproved: true,
             createdAt: new Date().toISOString()
           };
+          const idx = local.findIndex((u: any) => u.userId === currentUser.uid);
           if (idx >= 0) local[idx] = { ...local[idx], ...item };
           else local.unshift(item);
           localStorage.setItem('ismlar_local_users', JSON.stringify(local));
@@ -381,7 +393,8 @@ const App: React.FC = () => {
     if (!state.videoData) return;
     setIsRegeneratingAudio(true);
     try {
-      const fullScript = state.videoData.fullScript || `${(state.videoData.script || []).join(' ')} ${DEFAULT_OUTRO_TEXT}`;
+      const outro = isAdmin ? (draftOutroText || DEFAULT_OUTRO_TEXT) : '';
+      const fullScript = state.videoData.fullScript || (outro ? `${(state.videoData.script || []).join(' ')} ${outro}` : (state.videoData.script || []).join(' ')).trim();
       const audioBase64 = await generateAudio(fullScript, voice);
       if (audioBase64) {
         setState(prev => prev.videoData ? ({
@@ -652,7 +665,7 @@ const App: React.FC = () => {
     try {
       const scriptData = await generateScript(topic, useSearch, hookStyle);
       setDraftSegments(scriptData.script_segments || []);
-      setDraftOutroText(DEFAULT_OUTRO_TEXT);
+      setDraftOutroText(isAdmin ? DEFAULT_OUTRO_TEXT : '');
       setDraftHashtags(scriptData.hashtags || []);
       setDraftImagePrompts(scriptData.image_prompts_en || []);
       setIsScriptEditorOpen(true);
@@ -671,7 +684,8 @@ const App: React.FC = () => {
     setState({ isLoading: true, loadingStep: "O'zgartirilgan ssenariyga ovoz berilmoqda...", error: null, videoData: state.videoData });
 
     try {
-      const fullScriptWithOutro = `${customSegments.join(" ")} ${customOutro}`.trim();
+      const outroToUse = isAdmin ? customOutro : '';
+      const fullScriptWithOutro = outroToUse ? `${customSegments.join(" ")} ${outroToUse}`.trim() : customSegments.join(" ").trim();
       
       const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
 
@@ -698,7 +712,9 @@ const App: React.FC = () => {
           topic,
           script: customSegments,
           fullScript: fullScriptWithOutro,
-          hashtags: draftHashtags.length ? [...draftHashtags, "#luxecore", "#qadoqlash"] : ["#ismlar", "#luxecore", "#qadoqlash"],
+          hashtags: draftHashtags.length
+            ? (isAdmin ? [...draftHashtags, "#luxecore", "#qadoqlash"] : draftHashtags)
+            : (isAdmin ? ["#ismlar", "#luxecore", "#qadoqlash"] : ["#ismlar"]),
           imageUrls: finalImages.length ? finalImages : ["/fallback/scene-1.jpg"],
           audioBase64,
           imagePrompts: draftImagePrompts,
@@ -725,8 +741,8 @@ const App: React.FC = () => {
 
     try {
       const scriptData = await generateScript(topic, useSearch, hookStyle);
-      const outroText = DEFAULT_OUTRO_TEXT;
-      const fullScriptWithOutro = `${scriptData.full_script} ${outroText}`;
+      const outroText = isAdmin ? DEFAULT_OUTRO_TEXT : '';
+      const fullScriptWithOutro = outroText ? `${scriptData.full_script} ${outroText}` : scriptData.full_script;
       
       setState(prev => ({ ...prev, loadingStep: 'Yoqimli ovoz yozilmoqda...' }));
       const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
@@ -761,7 +777,7 @@ const App: React.FC = () => {
           topic,
           script: scriptData.script_segments,
           fullScript: fullScriptWithOutro,
-          hashtags: [...scriptData.hashtags, "#luxecore", "#qadoqlash"],
+          hashtags: isAdmin ? [...scriptData.hashtags, "#luxecore", "#qadoqlash"] : scriptData.hashtags,
           imageUrls: finalImages.length ? finalImages : ["/fallback/scene-1.jpg", "/fallback/scene-2.jpg"],
           audioBase64,
           imagePrompts: scriptData.image_prompts_en,
@@ -769,7 +785,7 @@ const App: React.FC = () => {
         }
       });
       setDraftSegments(scriptData.script_segments);
-      setDraftOutroText(DEFAULT_OUTRO_TEXT);
+      setDraftOutroText(isAdmin ? DEFAULT_OUTRO_TEXT : '');
       setDraftHashtags(scriptData.hashtags);
       setDraftImagePrompts(scriptData.image_prompts_en || []);
 
@@ -815,16 +831,18 @@ const App: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-             <button
-               onClick={() => setIsAdSettingsOpen(true)}
-               className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition flex items-center gap-1 shadow-sm"
-               title="Reklama joyi va Watermark"
-             >
-               <span className="text-xs">📢</span>
-               <span className="hidden sm:inline">Reklama</span>
-             </button>
+             {isAdmin && (
+               <button
+                 onClick={() => setIsAdSettingsOpen(true)}
+                 className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition flex items-center gap-1 shadow-sm"
+                 title="Reklama joyi va Watermark"
+               >
+                 <span className="text-xs">📢</span>
+                 <span className="hidden sm:inline">Reklama</span>
+               </button>
+             )}
 
-             {user?.email?.toLowerCase() === 'akbarjonrovshanov13@gmail.com' && (
+             {isAdmin && (
                <button
                  onClick={() => setIsAdminOpen(true)}
                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-xl text-xs font-bold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 shadow-sm transition flex items-center gap-1"
@@ -1484,15 +1502,15 @@ const App: React.FC = () => {
                    audioBase64={state.videoData.audioBase64 || ""} 
                    scriptSegments={state.videoData.script} 
                    topic={state.videoData.topic} 
-                   customOutroImages={adConfig.customOutroImages}
-                   outroText={draftOutroText}
+                   customOutroImages={isAdmin ? adConfig.customOutroImages : []}
+                   outroText={isAdmin ? draftOutroText : ""}
                    wordTimings={subtitleTimings}
                    captionStyle={captionStyle}
-                   watermarkText={adConfig.watermarkText}
-                   watermarkPosition={adConfig.watermarkPosition}
-                   adTitle={adConfig.adTitle}
-                   adSubtitle={adConfig.adSubtitle}
-                   adHandle={adConfig.adHandle}
+                   watermarkText={isAdmin ? adConfig.watermarkText : ""}
+                   watermarkPosition={isAdmin ? adConfig.watermarkPosition : WatermarkPosition.DISABLED}
+                   adTitle={isAdmin ? adConfig.adTitle : ""}
+                   adSubtitle={isAdmin ? adConfig.adSubtitle : ""}
+                   adHandle={isAdmin ? adConfig.adHandle : ""}
                    voiceSpeed={voiceSpeed}
                    onVoiceSpeedChange={setVoiceSpeed}
                  />
@@ -1570,10 +1588,11 @@ const App: React.FC = () => {
         onClose={() => setIsScriptEditorOpen(false)}
         topic={topic}
         initialSegments={draftSegments}
-        initialOutroText={draftOutroText}
+        initialOutroText={isAdmin ? draftOutroText : ""}
         onSaveAndGenerate={handleGenerateFromCustomScript}
         isLoading={state.isLoading}
         loadingStep={state.loadingStep}
+        isAdmin={isAdmin}
       />
 
       {showIdeas && (
@@ -1641,12 +1660,14 @@ const App: React.FC = () => {
       />
 
       {/* Ad & Watermark Settings Modal */}
-      <AdSettingsModal
-        isOpen={isAdSettingsOpen}
-        onClose={() => setIsAdSettingsOpen(false)}
-        adConfig={adConfig}
-        onUpdateAdConfig={(newConfig) => setAdConfig(prev => ({ ...prev, ...newConfig }))}
-      />
+      {isAdmin && (
+        <AdSettingsModal
+          isOpen={isAdSettingsOpen}
+          onClose={() => setIsAdSettingsOpen(false)}
+          adConfig={adConfig}
+          onUpdateAdConfig={(newConfig) => setAdConfig(prev => ({ ...prev, ...newConfig }))}
+        />
+      )}
 
       {/* Auth / Kirish Modal */}
       <AuthModal

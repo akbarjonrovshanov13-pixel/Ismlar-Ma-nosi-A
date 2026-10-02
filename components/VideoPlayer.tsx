@@ -112,11 +112,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   outroText,
   wordTimings,
   captionStyle = CaptionStyle.TIKTOK_YELLOW,
-  watermarkText = "✨ @luxe_core_uz",
-  watermarkPosition = WatermarkPosition.TOP_RIGHT,
-  adTitle = "LUXE CORE",
-  adSubtitle = "Qutilar • Paketlar • Qadoqlash • HoReCa",
-  adHandle = "@luxe_core_uz",
+  watermarkText = "",
+  watermarkPosition = WatermarkPosition.DISABLED,
+  adTitle = "",
+  adSubtitle = "",
+  adHandle = "",
   voiceSpeed = 1.1,
   onVoiceSpeedChange
 }) => {
@@ -159,8 +159,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const particlesRef = useRef<Particle[]>([]);
   const outroImagesRef = useRef<HTMLImageElement[]>([]);
 
-  // Preload Luxe Core Outro Images
+  // Preload Outro Images (if provided or outroText is active)
   useEffect(() => {
+    const hasOutro = Boolean((outroText && outroText.trim().length > 0) || (customOutroImages && customOutroImages.length > 0));
+    if (!hasOutro) {
+      outroImagesRef.current = [];
+      return;
+    }
     const defaultUrls = [
       "/fallback/outro-boxes.jpg", // Qutilar
       "/fallback/outro-bags.jpg",  // Paketlar
@@ -180,7 +185,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       };
     });
     outroImagesRef.current = loaded;
-  }, [customOutroImages]);
+  }, [customOutroImages, outroText]);
 
   // Download Progress State
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
@@ -684,12 +689,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // count and its own rate lands within a few hundredths, and still tracks an edited outro.
   const OUTRO_CHARS_PER_SECOND = 12.5;
   const outroDuration = useMemo(() => {
-    if (!duration) return OUTRO_DURATION;
     const outroChars = (outroText || "").trim().length;
+    // If no outro text and no custom outro images, disable outro completely (0s)
+    if (!outroChars && (!customOutroImages || customOutroImages.length === 0)) {
+      return 0;
+    }
+    if (!duration) return OUTRO_DURATION;
     if (!outroChars) return Math.min(OUTRO_DURATION, duration * 0.25);
     // Clamp so an empty or runaway outro can't swallow the video or vanish entirely.
     return Math.min(Math.max(outroChars / OUTRO_CHARS_PER_SECOND, 2), duration * 0.4);
-  }, [duration, outroText]);
+  }, [duration, outroText, customOutroImages]);
 
   // 3. Subtitle Calculation (scaled by currentSpeed)
   const preparedSubtitles = useMemo<PreparedSubtitle[]>(() => {
@@ -806,8 +815,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const effectiveDuration = duration > 0 ? duration / currentSpeed : 0;
     const effectiveOutroDuration = outroDuration / currentSpeed;
 
-    // --- Luxe Core Outro Check (starts when the closing line starts being spoken) ---
-    const isOutro = effectiveDuration > effectiveOutroDuration && time >= (effectiveDuration - effectiveOutroDuration);
+    // --- Luxe Core / Branding Outro Check (only active if outroDuration > 0) ---
+    const isOutro = effectiveOutroDuration > 0 && effectiveDuration > effectiveOutroDuration && time >= (effectiveDuration - effectiveOutroDuration);
 
     if (isOutro) {
         const outroTime = time - (effectiveDuration - effectiveOutroDuration); // ranges from 0 to effectiveOutroDuration
@@ -1431,9 +1440,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     ctx.shadowColor = "transparent";
 
     // --- Watermark Badge ---
-    if (watermarkPosition !== WatermarkPosition.DISABLED) {
+    const hasWatermark = watermarkPosition !== WatermarkPosition.DISABLED && Boolean(watermarkText && watermarkText.trim().length > 0);
+    if (hasWatermark) {
         ctx.font = 'bold 30px "Inter", sans-serif';
-        const wText = watermarkText || "✨ @luxe_core_uz";
+        const wText = watermarkText || "";
         const wMetrics = ctx.measureText(wText);
         const boxW = Math.max(300, wMetrics.width + 60);
         const boxH = 75;
@@ -1841,39 +1851,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }
       };
 
-  const handleShareOrSave = async () => {
-    if (!readyVideo) return;
-    setIsSharing(true);
-    try {
-      if (readyVideo.file && navigator.canShare && navigator.canShare({ files: [readyVideo.file] })) {
-        await navigator.share({
-          files: [readyVideo.file],
-          title: readyVideo.fileName,
-          text: `${topic} ismining ma'nosi videosi`
-        });
-        setIsSharing(false);
-        return;
-      }
-    } catch (e: any) {
-      if (e.name !== 'AbortError') {
-        console.warn("Web Share failed, attempting fallback download:", e);
-      } else {
-        setIsSharing(false);
-        return;
-      }
-    } finally {
-      setIsSharing(false);
-    }
-
-    // Fallback: trigger standard download anchor
-    const a = document.createElement('a');
-    a.href = readyVideo.url;
-    a.download = readyVideo.fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
       recorder.start();
       
       const recStartTime = performance.now();
@@ -1920,6 +1897,39 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           };
           rafId = requestAnimationFrame(rafLoop);
       }
+  };
+
+  const handleShareOrSave = async () => {
+    if (!readyVideo) return;
+    setIsSharing(true);
+    try {
+      if (readyVideo.file && navigator.canShare && navigator.canShare({ files: [readyVideo.file] })) {
+        await navigator.share({
+          files: [readyVideo.file],
+          title: readyVideo.fileName,
+          text: `${topic} ismining ma'nosi videosi`
+        });
+        setIsSharing(false);
+        return;
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.warn("Web Share failed, attempting fallback download:", e);
+      } else {
+        setIsSharing(false);
+        return;
+      }
+    } finally {
+      setIsSharing(false);
+    }
+
+    // Fallback: trigger standard download anchor
+    const a = document.createElement('a');
+    a.href = readyVideo.url;
+    a.download = readyVideo.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   return (

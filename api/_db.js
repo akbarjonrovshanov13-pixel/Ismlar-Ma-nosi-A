@@ -1,13 +1,11 @@
 import pg from "pg";
 const { Pool } = pg;
 
-const FALLBACK_DB_URL = "postgresql://neondb_owner:npg_CudM3xrHnsf5@ep-autumn-silence-b1dizcyq-pooler.c-5.eu-central-1.aws.neon.tech/neondb?sslmode=require";
-
 let pool = null;
 
 export async function getPool() {
   if (!pool) {
-    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || FALLBACK_DB_URL;
+    const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
 
     try {
       if (connectionString) {

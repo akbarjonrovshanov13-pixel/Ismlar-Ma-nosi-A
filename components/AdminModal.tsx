@@ -16,7 +16,8 @@ import {
   updateUserCreditsInPostgres,
   updateUserDetailsInPostgres,
   syncUserWithPostgres,
-  deleteUserFromPostgres
+  deleteUserFromPostgres,
+  setAdminKey
 } from '../lib/postgresService';
 
 interface AdminModalProps {
@@ -59,6 +60,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   useEffect(() => {
     // Auto unlock if logged in as primary admin email
     if (currentUserEmail && currentUserEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com') {
+      setAdminKey('Hisobot201415!');
       setIsUnlocked(true);
     }
   }, [currentUserEmail]);
@@ -317,6 +319,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     if (ADMIN_PASSKEYS.includes(passkey.trim())) {
+      setAdminKey(passkey.trim());
       setIsUnlocked(true);
       loadAdminData();
     } else {

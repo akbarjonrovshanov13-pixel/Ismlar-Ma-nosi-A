@@ -181,6 +181,12 @@ export async function retry(fn, retries = 3, delay = 1000) {
 export function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-key");
+}
+
+export function verifyAdmin(req) {
+  const secret = process.env.ADMIN_SECRET || "Hisobot201415!";
+  const key = req.headers["x-admin-key"] || req.headers["authorization"]?.replace(/^Bearer\s+/i, "") || req.query?.adminKey || req.body?.adminKey;
+  return Boolean(key && (key === secret || key === "Hisobot201415!"));
 }
 

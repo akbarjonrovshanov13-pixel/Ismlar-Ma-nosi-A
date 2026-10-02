@@ -9,6 +9,7 @@ interface ScriptEditorModalProps {
   onSaveAndGenerate: (segments: string[], outroText: string) => void;
   isLoading: boolean;
   loadingStep: string;
+  isAdmin?: boolean;
 }
 
 const BRAND_PRESETS = [
@@ -27,6 +28,7 @@ export const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
   onSaveAndGenerate,
   isLoading,
   loadingStep,
+  isAdmin = false,
 }) => {
   const [segments, setSegments] = useState<string[]>([]);
   const [outroText, setOutroText] = useState<string>('');
@@ -34,8 +36,8 @@ export const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
 
   useEffect(() => {
     setSegments(initialSegments.length > 0 ? [...initialSegments] : ['']);
-    setOutroText(initialOutroText || BRAND_PRESETS[0]);
-  }, [initialSegments, initialOutroText, isOpen]);
+    setOutroText(isAdmin ? (initialOutroText || BRAND_PRESETS[0]) : '');
+  }, [initialSegments, initialOutroText, isOpen, isAdmin]);
 
   if (!isOpen) return null;
 
@@ -69,7 +71,8 @@ export const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
     setOutroText(preset);
   };
 
-  const fullTextPreview = `${segments.filter(s => s.trim().length > 0).join(' ')} ${outroText}`.trim();
+  const effectiveOutro = isAdmin ? outroText : '';
+  const fullTextPreview = `${segments.filter(s => s.trim().length > 0).join(' ')} ${effectiveOutro}`.trim();
   const wordCount = fullTextPreview.split(/\s+/).filter(Boolean).length;
   const estimatedSeconds = Math.round(wordCount / 2.3); // Avg speaking speed ~2.3 words/sec in Uzbek
 
@@ -186,41 +189,43 @@ export const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
                 </div>
               ))}
 
-              {/* Outro Brand Text Section */}
-              <div className="bg-gradient-to-br from-amber-500/10 to-slate-900 p-5 rounded-2xl border border-amber-500/20 space-y-3 mt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-400 text-sm">📢</span>
-                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                      Brend Ovozli Reklama Matni (Outro)
-                    </span>
+              {/* Outro Brand Text Section (Faqat Admin uchun) */}
+              {isAdmin && (
+                <div className="bg-gradient-to-br from-amber-500/10 to-slate-900 p-5 rounded-2xl border border-amber-500/20 space-y-3 mt-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-400 text-sm">📢</span>
+                      <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                        Brend Ovozli Reklama Matni (Outro)
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">Luxe Core</span>
                   </div>
-                  <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">Luxe Core</span>
-                </div>
 
-                <textarea
-                  rows={2}
-                  value={outroText}
-                  onChange={(e) => setOutroText(e.target.value)}
-                  placeholder="Video so'ngida diktor aytadigan brend jumlasi..."
-                  className="w-full bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-200 placeholder-slate-600 focus:outline-none focus:border-amber-400 resize-none"
-                />
+                  <textarea
+                    rows={2}
+                    value={outroText}
+                    onChange={(e) => setOutroText(e.target.value)}
+                    placeholder="Video so'ngida diktor aytadigan brend jumlasi..."
+                    className="w-full bg-slate-950 border border-amber-500/30 rounded-xl p-3 text-sm text-amber-200 placeholder-slate-600 focus:outline-none focus:border-amber-400 resize-none"
+                  />
 
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-slate-400 block">Tayyor brend jumlalari:</span>
-                  <div className="flex flex-wrap gap-2">
-                    {BRAND_PRESETS.map((preset, pIdx) => (
-                      <button
-                        key={pIdx}
-                        onClick={() => addBrandPresetToOutro(preset)}
-                        className="text-[10px] bg-slate-900 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-amber-500/40 transition text-left"
-                      >
-                        + {preset}
-                      </button>
-                    ))}
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 block">Tayyor brend jumlalari:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {BRAND_PRESETS.map((preset, pIdx) => (
+                        <button
+                          key={pIdx}
+                          onClick={() => addBrandPresetToOutro(preset)}
+                          className="text-[10px] bg-slate-900 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 px-2.5 py-1 rounded-lg border border-slate-800 hover:border-amber-500/40 transition text-left"
+                        >
+                          + {preset}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
             </div>
           ) : (
@@ -256,7 +261,7 @@ export const ScriptEditorModal: React.FC<ScriptEditorModalProps> = ({
           </button>
 
           <button
-            onClick={() => onSaveAndGenerate(segments.filter(s => s.trim().length > 0), outroText)}
+            onClick={() => onSaveAndGenerate(segments.filter(s => s.trim().length > 0), isAdmin ? outroText : '')}
             disabled={isLoading || segments.filter(s => s.trim().length > 0).length === 0}
             className="flex-1 py-3.5 rounded-xl text-xs font-black uppercase tracking-wider bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-500 hover:to-purple-500 text-white shadow-lg shadow-brand-500/25 border border-brand-500/40 transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
           >

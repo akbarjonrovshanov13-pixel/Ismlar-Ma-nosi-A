@@ -1,5 +1,5 @@
 import { query, getPool } from "./_db.js";
-import { setCors } from "./_helpers.js";
+import { setCors, verifyAdmin } from "./_helpers.js";
 
 export default async function handler(req, res) {
   setCors(res);
@@ -8,6 +8,9 @@ export default async function handler(req, res) {
   try {
     // 1. GET: List all payments (for Admin)
     if (req.method === "GET") {
+      if (!verifyAdmin(req)) {
+        return res.status(403).json({ error: "Ruxsat berilmadi: Admin huquqi talab qilinadi" });
+      }
       const p = await getPool();
       const poolAvailable = Boolean(p);
       const result = await query(
@@ -61,6 +64,9 @@ export default async function handler(req, res) {
 
     // 3. PATCH: Admin approve or reject payment
     if (req.method === "PATCH") {
+      if (!verifyAdmin(req)) {
+        return res.status(403).json({ error: "Ruxsat berilmadi: To'lovni tasdiqlash yoki rad etish uchun admin huquqi talab qilinadi" });
+      }
       const { paymentId, status, creditsToAdd } = req.body || {};
       if (!paymentId || !status) {
         return res.status(400).json({ error: "paymentId va status maydonlari shart" });
