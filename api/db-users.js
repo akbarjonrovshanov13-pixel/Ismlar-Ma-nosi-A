@@ -70,26 +70,47 @@ export default async function handler(req, res) {
           [uid, safeEmail, queryName || (isPrimaryAdmin ? "Admin (Akbarjon)" : "Foydalanuvchi"), queryPhoto || "", initialCredits]
         );
 
-        const row = insertRes.rows[0];
-        if (row) {
-          return res.status(200).json({
-            user: {
-              userId: row.uid,
-              email: row.email,
-              displayName: row.display_name || "",
-              photoURL: row.photo_url || "",
-              phone: row.phone || "",
-              claimedTelegramBonus: Boolean(row.claimed_telegram_bonus),
-              credits: Number(row.credits) || initialCredits,
-              totalAllowed: Number(row.total_allowed) || initialCredits,
-              isApproved: Boolean(row.is_approved),
-              createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
-            },
-          });
-        }
+        const row = insertRes.rows[0] || {
+          uid,
+          email: safeEmail,
+          display_name: queryName || (isPrimaryAdmin ? "Admin (Akbarjon)" : "Foydalanuvchi"),
+          photo_url: queryPhoto || "",
+          phone: "",
+          claimed_telegram_bonus: false,
+          credits: initialCredits,
+          total_allowed: initialCredits,
+          is_approved: true,
+          created_at: new Date().toISOString(),
+        };
+
+        return res.status(200).json({
+          user: {
+            userId: row.uid,
+            email: row.email,
+            displayName: row.display_name || "",
+            photoURL: row.photo_url || "",
+            phone: row.phone || "",
+            claimedTelegramBonus: Boolean(row.claimed_telegram_bonus),
+            credits: Number(row.credits) || initialCredits,
+            totalAllowed: Number(row.total_allowed) || initialCredits,
+            isApproved: Boolean(row.is_approved),
+            createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+          },
+        });
       }
 
-      const row = result.rows[0];
+      const row = result.rows[0] || {
+        uid,
+        email: (queryEmail && queryEmail.trim()) || `${uid}@user.ismlar.ai`,
+        display_name: queryName || "Foydalanuvchi",
+        photo_url: queryPhoto || "",
+        phone: "",
+        claimed_telegram_bonus: false,
+        credits: 0,
+        total_allowed: 0,
+        is_approved: true,
+        created_at: new Date().toISOString(),
+      };
       return res.status(200).json({
         user: {
           userId: row.uid,
