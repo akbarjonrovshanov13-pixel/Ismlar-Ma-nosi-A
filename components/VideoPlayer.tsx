@@ -632,8 +632,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             const maxOffsetY = BUFFER_H - HEIGHT;
             const transitionType = index % 5;
 
-            // Name frames: Frame 0 (intro hook) and Frame 3 / last frame (climax outro)
-            const isNameFrame = (index === 0 || index === (validImages.length - 1) || index === 3);
+            // Name frames: Frame 0 (intro hook) and last frame (climax outro)
+            const isNameFrame = validImages.length <= 1 ? (index === 0) : (index === 0 || index === (validImages.length - 1));
 
             let startX = 0, startY = 0, startScale = 1.0;
             let endX = 0, endY = 0, endScale = 1.15;
