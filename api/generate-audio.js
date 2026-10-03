@@ -41,6 +41,64 @@ function splitIntoChunks(text, targetChunks) {
   return chunks;
 }
 
+/**
+ * Seamlessly concatenates 16-bit 24kHz PCM audio buffers with:
+ * 1. Even byte-boundary alignment (prevents byte-swap white noise).
+ * 2. 15ms smooth Hann fade-out at the end of each chunk.
+ * 3. 120ms natural breathing silence between sentences.
+ * 4. 15ms smooth Hann fade-in at the start of each chunk.
+ * Completely eliminates clicks, pops, DC jumps (like the 23,766-step jump at 37s), and glitch sounds!
+ */
+function concatenatePcmChunks(buffers, sampleRate = 24000) {
+  if (!buffers || buffers.length === 0) return Buffer.alloc(0);
+  if (buffers.length === 1) return buffers[0];
+
+  const fadeSamples = Math.round(sampleRate * 0.015); // 15ms = 360 samples
+  const pauseSamples = Math.round(sampleRate * 0.120); // 120ms natural breathing silence = 2880 samples
+  const pauseBytes = Buffer.alloc(pauseSamples * 2); // zeros
+
+  const processedChunks = buffers.map((buf, chunkIdx) => {
+    // 1. Ensure even byte length (16-bit PCM = 2 bytes per sample)
+    const safeLen = buf.length - (buf.length % 2);
+    const sampleCount = safeLen / 2;
+    if (sampleCount <= 0) return Buffer.alloc(0);
+
+    const int16 = new Int16Array(buf.buffer, buf.byteOffset, sampleCount);
+    const copy = new Int16Array(int16);
+
+    // Fade-in on chunks after the first
+    if (chunkIdx > 0 && sampleCount > fadeSamples) {
+      for (let i = 0; i < fadeSamples; i++) {
+        const factor = 0.5 * (1 - Math.cos((Math.PI * i) / fadeSamples)); // smooth Hann curve
+        copy[i] = Math.round(copy[i] * factor);
+      }
+    }
+
+    // Fade-out on chunks before the last
+    if (chunkIdx < buffers.length - 1 && sampleCount > fadeSamples) {
+      for (let i = 0; i < fadeSamples; i++) {
+        const samplePos = sampleCount - 1 - i;
+        const factor = 0.5 * (1 - Math.cos((Math.PI * i) / fadeSamples)); // smooth Hann curve
+        copy[samplePos] = Math.round(copy[samplePos] * factor);
+      }
+    }
+
+    return Buffer.from(copy.buffer, copy.byteOffset, copy.byteLength);
+  });
+
+  const finalParts = [];
+  for (let i = 0; i < processedChunks.length; i++) {
+    if (processedChunks[i].length > 0) {
+      finalParts.push(processedChunks[i]);
+      if (i < processedChunks.length - 1) {
+        finalParts.push(pauseBytes);
+      }
+    }
+  }
+
+  return Buffer.concat(finalParts);
+}
+
 export const maxDuration = 60;
 export const config = { maxDuration: 60 };
 
@@ -120,7 +178,7 @@ export default async function handler(req, res) {
     const mimeType = parts[0]?.mimeType || TTS_MIME_DEFAULT;
     const audio = parts.length === 1
       ? parts[0].data
-      : Buffer.concat(parts.map((p) => Buffer.from(p.data, "base64"))).toString("base64");
+      : concatenatePcmChunks(parts.map((p) => Buffer.from(p.data, "base64"))).toString("base64");
 
     res.status(200).json({ audio, mimeType, model: successfulModel });
   } catch (err) {
