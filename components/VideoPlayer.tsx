@@ -258,6 +258,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return ctx.createBuffer(1, frameCount, sampleRate);
   };
 
+  // Helper: Create a studio-grade voice cleanup filter chain (De-Esser + Anti-Aliasing Lowpass + Rumble Highpass)
+  // Eliminates high-frequency vocoder hiss ("vishshsh"), sibilance and 24kHz->48kHz resampling artifacts
+  const createSpeechFilterChain = (ctx: AudioContext) => {
+    // 1. Highpass: Cuts inaudible sub-85Hz rumble and DC offset
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.setValueAtTime(85, 0);
+    hp.Q.setValueAtTime(0.707, 0);
+
+    // 2. De-Esser Peaking Filter: Tames harsh "sh", "s", "ch", "z" sibilance at 7.2kHz by -5dB
+    const deEsser = ctx.createBiquadFilter();
+    deEsser.type = "peaking";
+    deEsser.frequency.setValueAtTime(7200, 0);
+    deEsser.Q.setValueAtTime(1.8, 0);
+    deEsser.gain.setValueAtTime(-5.0, 0);
+
+    // 3. Anti-Aliasing Lowpass: Smoothly rolls off harsh digital vocoder noise above 10.8kHz
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(10800, 0);
+    lp.Q.setValueAtTime(0.707, 0);
+
+    hp.connect(deEsser);
+    deEsser.connect(lp);
+
+    return { input: hp, output: lp };
+  };
+
   // Helper: Generate Procedural Royalty-Free Background Music based on Style
   const createProceduralBGMBuffer = (ctx: AudioContext, targetDuration: number, style: string): AudioBuffer => {
     const sampleRate = ctx.sampleRate;
@@ -1619,11 +1647,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     previewComp.connect(previewMasterGain);
     previewMasterGain.connect(ctx.destination);
 
-    // 1. Speech Audio
+    // 1. Speech Audio with Studio Vocal Filter Chain (No "vishshsh")
+    const speechFilter = createSpeechFilterChain(ctx);
     const speechSource = ctx.createBufferSource();
     speechSource.buffer = buf;
     speechSource.playbackRate.value = speed;
-    speechSource.connect(previewComp);
+    speechSource.connect(speechFilter.input);
+    speechFilter.output.connect(previewComp);
     const bufferOffset = Math.min(Math.max(0, buf.duration - 0.05), Math.max(0, offset * speed));
     speechSource.start(0, bufferOffset);
     speechSourceRef.current = speechSource;
@@ -1826,11 +1856,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       exportComp.connect(exportMasterGain);
       exportMasterGain.connect(dest);
 
-      // 1. Speech Audio
+      // 1. Speech Audio with Studio Vocal Filter Chain (No "vishshsh")
+      const speechFilter = createSpeechFilterChain(recCtx);
       const speechSource = recCtx.createBufferSource();
       speechSource.buffer = buf;
       speechSource.playbackRate.value = currentSpeed;
-      speechSource.connect(exportComp);
+      speechSource.connect(speechFilter.input);
+      speechFilter.output.connect(exportComp);
       speechSource.start(0);
 
       // 2. Background Music Mixing (if enabled) with Smart Ducking
