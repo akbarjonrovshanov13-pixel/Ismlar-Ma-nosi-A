@@ -193,7 +193,9 @@ export function verifyAdmin(req) {
     console.warn("verifyAdmin: ADMIN_SECRET is not set, refusing admin request");
     return false;
   }
-  const key = req.headers["x-admin-key"] || req.headers["authorization"]?.replace(/^Bearer\s+/i, "") || req.query?.adminKey || req.body?.adminKey;
+  // Headers only: a key in the URL (?adminKey=) ends up in Vercel logs, browser history and
+  // Referer headers. The app itself only ever sends x-admin-key (lib/postgresService.ts).
+  const key = req.headers["x-admin-key"] || req.headers["authorization"]?.replace(/^Bearer\s+/i, "");
   if (typeof key !== "string" || !key) return false;
   // Compare fixed-length digests so the check takes the same time for every guess
   const digest = (value) => createHash("sha256").update(value).digest();
