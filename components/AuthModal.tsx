@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { db, signInWithGoogle } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { syncUserWithPostgres } from '../lib/postgresService';
+import { syncUserWithPostgres, setAdminKey, verifyAdminKey } from '../lib/postgresService';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -22,8 +22,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
-
-  const ADMIN_PASSWORDS = ['Hisobot201415!'];
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -95,9 +93,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleAdminQuickLogin = (e: React.FormEvent) => {
+  const handleAdminQuickLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (ADMIN_PASSWORDS.includes(adminPass.trim())) {
+    const pass = adminPass.trim();
+    setLoading(true);
+    setErrorMsg(null);
+    // The admin password is the server's ADMIN_SECRET, so only the server can say whether it matches
+    const isValid = await verifyAdminKey(pass);
+    setLoading(false);
+    if (isValid) {
+      // Saved so the Admin panel unlocks without asking for the password again
+      setAdminKey(pass);
+
       const adminUser = {
         uid: "admin_akbarjon",
         email: "akbarjonrovshanov13@gmail.com",
@@ -261,9 +268,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="w-2/3 py-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20"
+                  disabled={loading}
+                  className="w-2/3 py-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-amber-500/20 disabled:opacity-50"
                 >
-                  👑 Kirish
+                  {loading ? "Tekshirilmoqda..." : "👑 Kirish"}
                 </button>
               </div>
             </form>

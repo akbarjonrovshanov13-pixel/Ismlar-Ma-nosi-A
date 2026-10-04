@@ -30,7 +30,8 @@ import {
   claimTelegramBonusInPostgres,
   saveVideoToPostgres,
   getUserSavedVideosFromPostgres,
-  deleteSavedVideoFromPostgres
+  deleteSavedVideoFromPostgres,
+  clearAdminKey
 } from './lib/postgresService';
 import { User, onAuthStateChanged } from 'firebase/auth';
 
@@ -292,6 +293,7 @@ const App: React.FC = () => {
 
   const handleLogOut = async () => {
     localStorage.removeItem('ismlar_auth_user');
+    clearAdminKey();
     setUser(null);
     setUserProfile(null);
     await logOut().catch(() => {});
@@ -1674,7 +1676,6 @@ const App: React.FC = () => {
       <AdminModal
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
-        currentUserEmail={user?.email}
         onRefreshUserProfile={() => fetchUserProfile()}
       />
 

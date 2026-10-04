@@ -17,23 +17,25 @@ import {
   updateUserDetailsInPostgres,
   syncUserWithPostgres,
   deleteUserFromPostgres,
-  setAdminKey
+  getAdminKey,
+  setAdminKey,
+  clearAdminKey,
+  verifyAdminKey
 } from '../lib/postgresService';
 
 interface AdminModalProps {
   isOpen: boolean;
   onClose: () => void;
-  currentUserEmail?: string | null;
   onRefreshUserProfile?: () => void;
 }
 
 export const AdminModal: React.FC<AdminModalProps> = ({
   isOpen,
   onClose,
-  currentUserEmail,
   onRefreshUserProfile,
 }) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
+  const [isCheckingKey, setIsCheckingKey] = useState(false);
   const [passkey, setPasskey] = useState('');
   const [activeTab, setActiveTab] = useState<'PAYMENTS' | 'USERS'>('USERS');
   const [payments, setPayments] = useState<PaymentRequestDocument[]>([]);
@@ -55,15 +57,20 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const [editNameInput, setEditNameInput] = useState('');
   const [isSavingUserEdit, setIsSavingUserEdit] = useState(false);
 
-  const ADMIN_PASSKEYS = ['Hisobot201415!'];
-
   useEffect(() => {
-    // Auto unlock if logged in as primary admin email
-    if (currentUserEmail && currentUserEmail.toLowerCase() === 'akbarjonrovshanov13@gmail.com') {
-      setAdminKey('Hisobot201415!');
-      setIsUnlocked(true);
-    }
-  }, [currentUserEmail]);
+    // Reuse a passkey saved by an earlier unlock (here or via the admin login in AuthModal), but
+    // only once the server accepts it: a key that no longer matches ADMIN_SECRET is dropped.
+    if (!isOpen || isUnlocked) return;
+    const savedKey = getAdminKey();
+    if (!savedKey) return;
+    setIsCheckingKey(true);
+    verifyAdminKey(savedKey)
+      .then((ok) => {
+        if (ok) setIsUnlocked(true);
+        else clearAdminKey();
+      })
+      .finally(() => setIsCheckingKey(false));
+  }, [isOpen, isUnlocked]);
 
   useEffect(() => {
     if (isOpen && isUnlocked) {
@@ -316,12 +323,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
     }
   };
 
-  const handleUnlock = (e: React.FormEvent) => {
+  const handleUnlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (ADMIN_PASSKEYS.includes(passkey.trim())) {
-      setAdminKey(passkey.trim());
+    const key = passkey.trim();
+    setIsCheckingKey(true);
+    const ok = await verifyAdminKey(key);
+    setIsCheckingKey(false);
+    if (ok) {
+      setAdminKey(key);
       setIsUnlocked(true);
-      loadAdminData();
     } else {
       alert("Xato Admin paroli!");
     }
@@ -425,7 +435,12 @@ export const AdminModal: React.FC<AdminModalProps> = ({
         </div>
 
         {/* Lock Screen if passkey not entered */}
-        {!isUnlocked ? (
+        {!isUnlocked && isCheckingKey ? (
+          <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-mono">Admin paroli tekshirilmoqda...</p>
+          </div>
+        ) : !isUnlocked ? (
           <div className="p-8 text-center space-y-5 max-w-md mx-auto my-auto">
             <div className="w-16 h-16 bg-red-500/10 text-red-400 border border-red-500/20 rounded-3xl flex items-center justify-center text-3xl mx-auto">
               🔐

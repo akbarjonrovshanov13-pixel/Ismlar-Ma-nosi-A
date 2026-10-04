@@ -40,13 +40,36 @@ export interface PaymentRequestDocument {
 const API_BASE = '/api';
 
 export const getAdminKey = (): string => {
-  return (typeof window !== 'undefined' ? (sessionStorage.getItem('admin_passkey') || localStorage.getItem('admin_passkey')) : null) || 'Hisobot201415!';
+  return (typeof window !== 'undefined' ? (sessionStorage.getItem('admin_passkey') || localStorage.getItem('admin_passkey')) : null) || '';
 };
 
 export const setAdminKey = (key: string): void => {
   if (typeof window !== 'undefined') {
     sessionStorage.setItem('admin_passkey', key);
     localStorage.setItem('admin_passkey', key);
+  }
+};
+
+export const clearAdminKey = (): void => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('admin_passkey');
+    localStorage.removeItem('admin_passkey');
+  }
+};
+
+// The admin passkey is the server's ADMIN_SECRET, which the browser never sees, so a passkey
+// is checked by calling an admin-only endpoint with it: anything but the right key gets a 403.
+export const verifyAdminKey = async (key: string): Promise<boolean> => {
+  if (!key) return false;
+  try {
+    const res = await fetch(`${API_BASE}/db-payments.js`, {
+      headers: { "x-admin-key": key },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Array.isArray(data.payments);
+  } catch {
+    return false;
   }
 };
 

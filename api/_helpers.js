@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 
 // In-memory cache for generated images to reduce API calls and save quota
@@ -184,9 +185,18 @@ export function setCors(res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-admin-key");
 }
 
+// The admin key lives only in the ADMIN_SECRET env var. Without it every admin request is
+// refused (fail closed) instead of falling back to a default that anyone could read.
 export function verifyAdmin(req) {
-  const secret = process.env.ADMIN_SECRET || "Hisobot201415!";
+  const secret = process.env.ADMIN_SECRET?.trim();
+  if (!secret) {
+    console.warn("verifyAdmin: ADMIN_SECRET is not set, refusing admin request");
+    return false;
+  }
   const key = req.headers["x-admin-key"] || req.headers["authorization"]?.replace(/^Bearer\s+/i, "") || req.query?.adminKey || req.body?.adminKey;
-  return Boolean(key && (key === secret || key === "Hisobot201415!"));
+  if (typeof key !== "string" || !key) return false;
+  // Compare fixed-length digests so the check takes the same time for every guess
+  const digest = (value) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(key), digest(secret));
 }
 
