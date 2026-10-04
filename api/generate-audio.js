@@ -15,6 +15,7 @@ const TTS_CANDIDATES = [
 ];
 
 const TTS_MIME_DEFAULT = "audio/L16;codec=pcm;rate=24000";
+const PCM_RATE = 24000; // pleyer ham, subtitr STT ham aynan 24kHz mono 16-bit kutadi
 const CHUNK_THRESHOLD = 250; // bundan qisqa matnni bo'lish foyda bermaydi
 const TARGET_CHUNKS = 4;
 
@@ -41,13 +42,48 @@ function splitIntoChunks(text, targetChunks) {
   return chunks;
 }
 
+// Gemini TTS endi xom PCM (audio/L16) o'rniga to'liq WAV fayl qaytaradi: boshida RIFF sarlavha,
+// oxirida esa ~7.6KB "C2PA" bloki (Content Credentials — AI-kelib chiqish sertifikati va imzosi).
+// Butun faylni PCM deb o'qisak, sarlavha bo'lak boshida "chiq" bo'lib, C2PA esa har bo'lak
+// oxirida ~160ms kuchli shovqin bo'lib eshitiladi. Shuning uchun faqat "data" namunalarini olamiz.
+function extractPcm(inlineData) {
+  const buf = Buffer.from(inlineData.data, "base64");
+  if (buf.length < 12 || buf.toString("ascii", 0, 4) !== "RIFF" || buf.toString("ascii", 8, 12) !== "WAVE") {
+    return buf; // allaqachon xom PCM
+  }
+
+  let fmt = null;
+  for (let pos = 12; pos + 8 <= buf.length; ) {
+    const id = buf.toString("ascii", pos, pos + 4);
+    const size = buf.readUInt32LE(pos + 4);
+    const body = pos + 8;
+    if (id === "fmt ") {
+      fmt = {
+        format: buf.readUInt16LE(body),
+        channels: buf.readUInt16LE(body + 2),
+        rate: buf.readUInt32LE(body + 4),
+        bits: buf.readUInt16LE(body + 14),
+      };
+    } else if (id === "data") {
+      // Boshqa format kelsa, bu nomzodni tashlab keyingisiga o'tamiz — noto'g'ri tezlikdagi ovozdan yaxshi
+      if (!fmt || fmt.format !== 1 || fmt.channels !== 1 || fmt.rate !== PCM_RATE || fmt.bits !== 16) {
+        throw new Error(`Kutilmagan WAV formati: ${JSON.stringify(fmt)}`);
+      }
+      return buf.subarray(body, Math.min(buf.length, body + size));
+    }
+    pos = body + size + (size & 1); // RIFF bo'laklari juft baytga tekislanadi
+  }
+  throw new Error("WAV ichida data bo'lagi topilmadi");
+}
+
 /**
  * Seamlessly concatenates 16-bit 24kHz PCM audio buffers with:
  * 1. Even byte-boundary alignment (prevents byte-swap white noise).
  * 2. 15ms smooth Hann fade-out at the end of each chunk.
  * 3. 120ms natural breathing silence between sentences.
  * 4. 15ms smooth Hann fade-in at the start of each chunk.
- * Completely eliminates clicks, pops, DC jumps (like the 23,766-step jump at 37s), and glitch sounds!
+ * Expects bare PCM: the loud ~160ms bursts at chunk ends (e.g. at 37s) were the WAV's C2PA
+ * block, not a boundary jump — extractPcm() strips it before this runs.
  */
 function concatenatePcmChunks(buffers, sampleRate = 24000) {
   if (!buffers || buffers.length === 0) return Buffer.alloc(0);
@@ -156,7 +192,7 @@ export default async function handler(req, res) {
           const response = await synthesizeWithRetry(chunk);
           const part = response.candidates?.[0]?.content?.parts?.[0]?.inlineData;
           if (!part?.data) throw new Error(`Bo'lak ${index} uchun audio topilmadi`);
-          return part;
+          return extractPcm(part);
         }));
 
         if (currentParts && currentParts.length === chunks.length) {
@@ -175,12 +211,10 @@ export default async function handler(req, res) {
       return res.status(200).json(SILENT_FALLBACK);
     }
 
-    const mimeType = parts[0]?.mimeType || TTS_MIME_DEFAULT;
-    const audio = parts.length === 1
-      ? parts[0].data
-      : concatenatePcmChunks(parts.map((p) => Buffer.from(p.data, "base64"))).toString("base64");
+    // Bitta bo'lak ham extractPcm'dan o'tgan bo'lishi shart — aks holda uning C2PA bloki ham eshitiladi
+    const audio = concatenatePcmChunks(parts).toString("base64");
 
-    res.status(200).json({ audio, mimeType, model: successfulModel });
+    res.status(200).json({ audio, mimeType: TTS_MIME_DEFAULT, model: successfulModel });
   } catch (err) {
     console.error("generate-audio error:", err);
     res.status(200).json(SILENT_FALLBACK);
