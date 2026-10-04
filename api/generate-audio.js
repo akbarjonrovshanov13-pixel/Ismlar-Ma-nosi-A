@@ -2,8 +2,10 @@ import { getVertexAI, retry, setCors } from "./_helpers.js";
 
 // VideoPlayer audioBase64="" holatini xavfsiz qo'llab-quvvatlaydi (ovozsiz video) —
 // shuning uchun ohirgi chora sifatida har doim 200 + bo'sh audio qaytariladi,
-// audio yo'qligi butun video generatsiyasini to'xtatib qo'ymasin.
+// audio yo'qligi butun video generatsiyasini to'xtatib qo'ymasin. Sababi esa `error`
+// maydonida qaytadi: klient uni ko'rsatadi, aks holda ovozsiz video jimgina chiqib ketardi.
 const SILENT_FALLBACK = { audio: "", mimeType: "" };
+const failure = (reason) => ({ ...SILENT_FALLBACK, error: String(reason || "TTS javob bermadi").slice(0, 300) });
 
 // Studio-grade & high-throughput latest Gemini TTS models (Released Sep 2026)
 const TTS_CANDIDATES = [
@@ -153,6 +155,7 @@ export default async function handler(req, res) {
 
     let parts = null;
     let successfulModel = null;
+    let lastError = null;
 
     // Try candidates in order: gemini-3.8-flash-tts -> gemini-3.8-flash-lite-tts -> legacy preview
     for (const candidate of TTS_CANDIDATES) {
@@ -162,6 +165,7 @@ export default async function handler(req, res) {
           ai = getVertexAI(candidate.location);
         } catch (e) {
           console.warn(`Vertex AI unavailable for ${candidate.location}:`, e.message);
+          lastError = `Vertex AI (${candidate.location}): ${e.message}`;
           continue;
         }
 
@@ -203,12 +207,13 @@ export default async function handler(req, res) {
         }
       } catch (candidateErr) {
         console.warn(`TTS candidate ${candidate.model} (${candidate.location}) failed, trying next:`, candidateErr.message);
+        lastError = `${candidate.model} (${candidate.location}): ${candidateErr.message}`;
       }
     }
 
     if (!parts) {
       console.warn("generate-audio: barcha TTS modellari muvaffaqiyatsiz, ovozsiz fallback");
-      return res.status(200).json(SILENT_FALLBACK);
+      return res.status(200).json(failure(lastError));
     }
 
     // Bitta bo'lak ham extractPcm'dan o'tgan bo'lishi shart — aks holda uning C2PA bloki ham eshitiladi
@@ -217,6 +222,6 @@ export default async function handler(req, res) {
     res.status(200).json({ audio, mimeType: TTS_MIME_DEFAULT, model: successfulModel });
   } catch (err) {
     console.error("generate-audio error:", err);
-    res.status(200).json(SILENT_FALLBACK);
+    res.status(200).json(failure(err?.message));
   }
 }

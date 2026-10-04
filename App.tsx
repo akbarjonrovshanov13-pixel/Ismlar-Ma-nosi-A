@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppState, ImageMode, VideoData, VoiceType, VoiceSpeed, HookStyle, CaptionStyle, WatermarkPosition, AdConfig } from './types';
 import { generateAudio, generateImages, generateScript, findImages, generateTopicIdeas, generateNameArt, alignSubtitles, AlignedWord } from './services/geminiService';
 import { CATEGORIZED_TOPICS, TOPIC_CATEGORIES } from './constants';
@@ -101,6 +101,9 @@ const App: React.FC = () => {
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
   const [cloudNotification, setCloudNotification] = useState<string | null>(null);
   const [isRegeneratingAudio, setIsRegeneratingAudio] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  // Har bir ovoz so'roviga raqam: javob kelguncha boshqa loyiha ochilsa, eskisi tashlab yuboriladi
+  const audioRequestRef = useRef(0);
 
   // In-App browser detection (Instagram, TikTok, Facebook)
   const [isInAppBrowser, setIsInAppBrowser] = useState(false);
@@ -371,46 +374,51 @@ const App: React.FC = () => {
 
   const handleSelectSavedVideo = (videoDoc: SavedVideoDocument) => {
     setTopic(videoDoc.topic);
-    setState({
-      isLoading: false,
-      loadingStep: '',
-      error: null,
-      videoData: {
-        topic: videoDoc.topic,
-        script: videoDoc.script,
-        fullScript: videoDoc.fullScript,
-        hashtags: videoDoc.hashtags,
-        imageUrls: videoDoc.imageUrls,
-        audioBase64: "", // regenerates on player if needed
-        imagePrompts: [],
-        sources: []
-      }
-    });
+    const videoData: VideoData = {
+      topic: videoDoc.topic,
+      script: videoDoc.script,
+      fullScript: videoDoc.fullScript,
+      hashtags: videoDoc.hashtags,
+      imageUrls: videoDoc.imageUrls,
+      audioBase64: "", // ovoz bazada saqlanmaydi — quyida qayta yoziladi
+      imagePrompts: [],
+      sources: []
+    };
+    setState({ isLoading: false, loadingStep: '', error: null, videoData });
+    // Segmentlar soni mos kelsa, oldingi videoning so'z vaqtlari shu loyihaga yopishib qolardi
+    setSubtitleTimings(null);
     setIsSavedProjectsOpen(false);
+    handleRegenerateAudio(videoData);
   };
 
-  const handleRegenerateAudio = async () => {
-    if (!state.videoData) return;
+  const handleRegenerateAudio = async (data: VideoData | null = state.videoData) => {
+    if (!data) return;
+    const requestId = ++audioRequestRef.current;
     setIsRegeneratingAudio(true);
+    setAudioError(null);
     try {
       const outro = isAdmin ? (draftOutroText || DEFAULT_OUTRO_TEXT) : '';
-      const fullScript = state.videoData.fullScript || (outro ? `${(state.videoData.script || []).join(' ')} ${outro}` : (state.videoData.script || []).join(' ')).trim();
-      const audioBase64 = await generateAudio(fullScript, voice);
-      if (audioBase64) {
-        setState(prev => prev.videoData ? ({
-          ...prev,
-          videoData: {
-            ...prev.videoData,
-            audioBase64
-          }
-        }) : prev);
-        const timings = await alignSubtitles(audioBase64, state.videoData.script || []);
-        if (timings) setSubtitleTimings(timings);
+      const fullScript = data.fullScript || (outro ? `${(data.script || []).join(' ')} ${outro}` : (data.script || []).join(' ')).trim();
+      const { audio: audioBase64, error } = await generateAudio(fullScript, voice);
+      if (requestId !== audioRequestRef.current) return;
+      if (!audioBase64) {
+        setAudioError(error || "Ovoz yaratilmadi");
+        return;
       }
+      setState(prev => prev.videoData ? ({
+        ...prev,
+        videoData: {
+          ...prev.videoData,
+          audioBase64
+        }
+      }) : prev);
+      const timings = await alignSubtitles(audioBase64, data.script || []);
+      if (timings && requestId === audioRequestRef.current) setSubtitleTimings(timings);
     } catch (e) {
       console.warn("Audio generation failed:", e);
+      if (requestId === audioRequestRef.current) setAudioError("Ovoz yaratilmadi");
     } finally {
-      setIsRegeneratingAudio(false);
+      if (requestId === audioRequestRef.current) setIsRegeneratingAudio(false);
     }
   };
 
@@ -682,12 +690,15 @@ const App: React.FC = () => {
     if (!isAuthorized) return;
 
     setState({ isLoading: true, loadingStep: "O'zgartirilgan ssenariyga ovoz berilmoqda...", error: null, videoData: state.videoData });
+    audioRequestRef.current++; // chala qolgan "Ovoz Qo'shish" javobi yangi videoga tushmasin
+    setIsRegeneratingAudio(false);
 
     try {
       const outroToUse = isAdmin ? customOutro : '';
       const fullScriptWithOutro = outroToUse ? `${customSegments.join(" ")} ${outroToUse}`.trim() : customSegments.join(" ").trim();
       
-      const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
+      const { audio: audioBase64, error: audioErr } = await generateAudio(fullScriptWithOutro, voice);
+      setAudioError(audioBase64 ? null : (audioErr || "Ovoz yaratilmadi"));
 
       setState(prev => ({ ...prev, loadingStep: 'Subtitrlar ovozga moslanmoqda...' }));
       setSubtitleTimings(await alignSubtitles(audioBase64, customSegments));
@@ -738,6 +749,8 @@ const App: React.FC = () => {
     if (!isAuthorized) return;
 
     setState({ isLoading: true, loadingStep: `${topic} ismining sirlari o'rganilmoqda...`, error: null, videoData: null });
+    audioRequestRef.current++; // chala qolgan "Ovoz Qo'shish" javobi yangi videoga tushmasin
+    setIsRegeneratingAudio(false);
 
     try {
       const scriptData = await generateScript(topic, useSearch, hookStyle);
@@ -745,7 +758,8 @@ const App: React.FC = () => {
       const fullScriptWithOutro = outroText ? `${scriptData.full_script} ${outroText}` : scriptData.full_script;
       
       setState(prev => ({ ...prev, loadingStep: 'Yoqimli ovoz yozilmoqda...' }));
-      const audioBase64 = await generateAudio(fullScriptWithOutro, voice);
+      const { audio: audioBase64, error: audioErr } = await generateAudio(fullScriptWithOutro, voice);
+      setAudioError(audioBase64 ? null : (audioErr || "Ovoz yaratilmadi"));
       await new Promise(r => setTimeout(r, 800));
 
       setState(prev => ({ ...prev, loadingStep: 'Subtitrlar ovozga moslanmoqda...' }));
@@ -1521,7 +1535,7 @@ const App: React.FC = () => {
                             <div className="flex items-center gap-2">
                               {state.videoData && !state.videoData.audioBase64 && (
                                 <button
-                                  onClick={handleRegenerateAudio}
+                                  onClick={() => handleRegenerateAudio()}
                                   disabled={isRegeneratingAudio}
                                   className="text-[10px] bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 px-3 py-1.5 rounded-xl border border-purple-500/30 font-bold transition flex items-center gap-1.5 disabled:opacity-50"
                                 >
@@ -1566,6 +1580,11 @@ const App: React.FC = () => {
                               </button>
                             </div>
                         </div>
+                        {!state.videoData.audioBase64 && !isRegeneratingAudio && (
+                          <div className="text-[11px] leading-relaxed bg-red-500/10 text-red-300 px-3 py-2 rounded-xl border border-red-500/30">
+                            ⚠️ Bu videoda ovoz yo'q{audioError ? ` (${audioError})` : ''}. Yuklab olishdan oldin «🎙️ Ovoz Qo'shish» tugmasini bosing.
+                          </div>
+                        )}
                         <p className="text-slate-300 text-sm leading-relaxed font-medium italic">"{state.videoData.fullScript}"</p>
                         <div className="pt-2 flex flex-wrap gap-2">
                             {state.videoData.hashtags.map((t, i) => <span key={i} className="text-[10px] bg-brand-500/10 text-brand-300 px-3 py-1.5 rounded-lg border border-brand-500/20">{t}</span>)}

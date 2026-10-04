@@ -1802,6 +1802,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const canvas = canvasRef.current;
       if (!canvas) return;
       if (downloadProgress !== null) return;
+      // TTS ishlamasa pleyer ovoz o'rniga jimlik qo'yadi — ovozsiz video bilmasdan yuklanib ketmasin
+      if (!audioBase64?.trim() && !window.confirm("Bu videoda ovoz yo'q (ovoz yaratilmadi).\n\nOvozsiz yuklab olinsinmi? Ovoz qo'shish uchun «🎙️ Ovoz Qo'shish» tugmasini bosing.")) return;
 
       // Clean up previous ready video if exists
       if (readyVideo?.url) {

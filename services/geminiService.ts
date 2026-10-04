@@ -66,23 +66,31 @@ const VOICE_MAP: Record<VoiceType, string> = {
   [VoiceType.PROFESSIONAL]: "Aoede",
 };
 
-export const generateAudio = async (text: string, voiceType: VoiceType): Promise<string> => {
-  // Backend serverless endpoint orqali (gemini-3.8-flash-tts / gemini-3.8-flash-lite-tts)
-  try {
-    const voiceName = VOICE_MAP[voiceType] || "Kore";
-    const res = await fetch(`${API_BASE}/generate-audio.js`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, voiceName }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return data.audio || "";
+export type AudioResult = { audio: string; error?: string };
+
+export const generateAudio = async (text: string, voiceType: VoiceType): Promise<AudioResult> => {
+  // Backend serverless endpoint orqali (gemini-3.8-flash-tts / gemini-3.8-flash-lite-tts).
+  // Bo'sh javob ilgari jimgina ovozsiz videoga aylanardi — vaqtinchalik nosozlik (kvota,
+  // timeout) uchun bir marta qayta urinamiz, baribir bo'lmasa sababini UI'ga qaytaramiz.
+  const voiceName = VOICE_MAP[voiceType] || "Kore";
+  let error = "Ovoz yaratilmadi";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1500));
+    try {
+      const res = await fetch(`${API_BASE}/generate-audio.js`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, voiceName }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.audio) return { audio: data.audio };
+      error = data.error || (res.ok ? "TTS bo'sh javob qaytardi" : `Server ${res.status} xatoligi`);
+    } catch (err: any) {
+      error = err?.message || "Tarmoq xatosi";
     }
-  } catch (err) {
-    console.warn("Backend TTS unavailable:", err);
   }
-  return "";
+  console.warn("Backend TTS failed:", error);
+  return { audio: "", error };
 };
 
 export const generateImages = async (
